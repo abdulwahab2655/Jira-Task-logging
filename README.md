@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🗓️ Jira Timesheet
+# 🗓️ Jira Task Logging
 
 **Fill in a whole release worth of Jira time in one pass.**
 
