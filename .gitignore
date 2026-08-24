@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Anything that identifies you or signs you in. The app saves your Jira
+# password in Windows Credential Manager; this file is only the fallback used
+# when `keyring` is missing, and it is base64, not encryption.
+.jira-credentials
+
+# The browser profile the automatic sign-in drives. It holds live Microsoft and
+# Jira sessions - it belongs on this machine only, and never in a commit.
+.sso-browser-profile/
+
+# Attendance exports and anything else pulled off the portal.
+.attendance-downloads/
+*.xlsx
+*.xls
+attendance*.csv
+
+# Editor / tooling
+.vscode/
+.idea/
+.claude/settings.local.json
+*.swp
+.DS_Store
+Thumbs.db

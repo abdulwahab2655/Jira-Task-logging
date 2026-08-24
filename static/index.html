@@ -1,0 +1,2339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jira Task Logging</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --panel2:#243449; --line:#334155;
+    --text:#e2e8f0; --muted:#94a3b8; --accent:#3b82f6; --accent2:#2563eb;
+    --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; --leave:#a855f7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:15px}
+  .wrap{max-width:860px;margin:0 auto;padding:28px 20px 80px}
+  h1{font-size:22px;margin:0 0 4px;display:flex;align-items:center;gap:10px}
+  h1 .dot{width:10px;height:10px;border-radius:50%;background:var(--accent)}
+  .sub{color:var(--muted);margin:0 0 24px;font-size:13px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:20px 22px;margin-bottom:16px;box-shadow:0 1px 0 rgba(0,0,0,.2)}
+  .card.disabled{opacity:.45;pointer-events:none}
+  .card h2{margin:0 0 14px;font-size:15px;display:flex;align-items:center;gap:9px}
+  .step{width:22px;height:22px;border-radius:50%;background:var(--panel2);
+    border:1px solid var(--line);display:inline-flex;align-items:center;
+    justify-content:center;font-size:12px;color:var(--muted)}
+  .card.done .step{background:var(--ok);border-color:var(--ok);color:#07230f}
+  label{display:block;font-size:12px;color:var(--muted);margin:10px 0 5px}
+  input,select{width:100%;padding:10px 12px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:9px;color:var(--text);font-size:14px}
+  input:focus,select:focus{outline:none;border-color:var(--accent);
+    box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+  input:hover,select:hover{border-color:#475569}
+  /* Tells the browser to draw its own widgets dark: the date picker popup,
+     the select list, the scrollbars and the spin buttons. */
+  :root,input,select{color-scheme:dark}
+  ::placeholder{color:var(--muted);opacity:.7}
+  select option{background:var(--panel2);color:var(--text)}
+  /* The browser's own date popup can't be themed past color-scheme, so it is
+     replaced below by one drawn from the same palette as everything else. */
+  input[type=date]::-webkit-calendar-picker-indicator{display:none}
+  .datefield{position:relative}
+  .datefield input[type=date]{padding-right:42px}
+  .cal-btn{position:absolute;right:6px;top:50%;transform:translateY(-50%);
+    background:none;border:none;margin:0;padding:7px;line-height:0;
+    border-radius:8px;cursor:pointer;opacity:.85}
+  .cal-btn:hover{background:rgba(255,255,255,.10);opacity:1}
+  /* Same story as the date popup: the open <select> list is drawn by the OS,
+     so the real select stays (for its value and events) and the list is ours. */
+  .picker{position:relative}
+  .picker select{display:none}
+  .picker-btn{width:100%;display:flex;align-items:center;justify-content:space-between;
+    gap:10px;margin-top:0;padding:10px 12px;font-size:14px;font-weight:400;
+    text-align:left;background:var(--panel2);border:1px solid var(--line);
+    border-radius:9px;color:var(--text)}
+  .picker-btn:hover{background:var(--panel2);border-color:#475569}
+  .picker-btn.open{border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+  .picker-btn.empty .picker-label{color:var(--muted)}
+  .picker-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .picker-chev{flex:0 0 auto;opacity:.55;transition:.15s}
+  .picker-btn.open .picker-chev{transform:rotate(180deg);opacity:.9}
+  .picker-list{position:absolute;z-index:60;display:none;padding:6px;
+    max-height:360px;overflow:auto;background:var(--panel);
+    border:1px solid var(--line);border-radius:12px;
+    box-shadow:0 18px 44px rgba(0,0,0,.55)}
+  .picker-list.show{display:block}
+  .picker-search{margin:2px 2px 6px}
+  .picker-opt{padding:9px 11px;border-radius:8px;font-size:13.5px;cursor:pointer;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .picker-opt:hover{background:var(--panel2)}
+  .picker-opt.sel{background:rgba(59,130,246,.16);color:#fff}
+  /* A Jira key with a long summary reads far better on two lines than as one
+     truncated one, so an option that has both gets both. */
+  .picker-opt.two{white-space:normal;padding:8px 11px}
+  .picker-opt .k{color:#93c5fd;font-weight:700}
+  .picker-opt.two .k{display:block;font-size:12.5px}
+  .picker-opt .s{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+    overflow:hidden;color:var(--muted);font-size:12px;line-height:1.35;margin-top:2px}
+  .picker-opt.sel .s{color:#cbd5e1}
+  .picker-none{padding:10px 11px;color:var(--muted);font-size:13px}
+  .cal{position:absolute;z-index:50;width:284px;display:none;padding:14px;
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 18px 44px rgba(0,0,0,.55)}
+  .cal.show{display:block}
+  .cal-head{display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:10px}
+  .cal-title{font-size:14px;font-weight:600}
+  .cal-nav{display:flex;gap:6px}
+  .cal-nav button{width:28px;height:28px;padding:0;margin:0;font-size:15px;
+    line-height:1;border-radius:8px;background:var(--panel2);
+    border:1px solid var(--line);color:var(--text);font-weight:600}
+  .cal-nav button:hover{background:var(--line)}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+  .cal-dow{font-size:11px;font-weight:700;color:var(--muted);text-align:center;
+    padding:6px 0;text-transform:uppercase}
+  .cal-day{height:32px;border-radius:9px;display:flex;align-items:center;
+    justify-content:center;font-size:13px;cursor:pointer;transition:.12s}
+  .cal-day:hover{background:var(--panel2)}
+  .cal-day.out{color:#475569}
+  .cal-day.today{box-shadow:inset 0 0 0 1px var(--accent);color:#93c5fd}
+  .cal-day.sel{background:var(--accent);color:#fff;font-weight:700}
+  .cal-day.sel:hover{background:var(--accent2)}
+  .cal-foot{display:flex;justify-content:space-between;margin-top:10px;
+    border-top:1px solid var(--line);padding-top:8px}
+  .cal-foot button{background:none;border:none;color:var(--accent);
+    font-size:12px;font-weight:600;padding:4px 8px;margin:0;border-radius:7px}
+  .cal-foot button:hover{background:rgba(59,130,246,.14)}
+  .row{display:flex;gap:12px}.row>div{flex:1}
+  button{background:var(--accent);color:#fff;border:none;border-radius:9px;
+    padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer;margin-top:14px}
+  button:hover{background:var(--accent2)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+  .msg{margin-top:12px;font-size:13px;padding:9px 12px;border-radius:8px;display:none}
+  .msg.show{display:block}
+  .msg.ok{background:rgba(34,197,94,.12);color:#86efac;border:1px solid rgba(34,197,94,.3)}
+  .msg.err{background:rgba(239,68,68,.12);color:#fca5a5;border:1px solid rgba(239,68,68,.3)}
+  .msg.info{background:rgba(59,130,246,.12);color:#93c5fd;border:1px solid rgba(59,130,246,.3)}
+  .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;
+    background:var(--panel2);border:1px solid var(--line);color:var(--muted);margin-left:8px}
+  .drop{border:2px dashed var(--line);border-radius:12px;padding:26px;text-align:center;
+    color:var(--muted);cursor:pointer;transition:.15s;background:var(--panel2)}
+  .drop.hover{border-color:var(--accent);color:var(--text);background:rgba(59,130,246,.08)}
+  /* A strip: a labelled block that reads as one thing, with its own action
+     and a state badge. Used for attendance, the sprint match and the plan. */
+  .strip{display:flex;align-items:center;justify-content:space-between;gap:16px;
+    flex-wrap:wrap;margin-top:6px;padding:14px 16px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:12px}
+  .strip-title{font-size:13px;font-weight:600}
+  .strip .hint{margin-top:3px}
+  .strip-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .strip-actions button{margin-top:0}
+  .strip.ok{border-color:rgba(34,197,94,.45);background:rgba(34,197,94,.07)}
+  .badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;
+    background:rgba(34,197,94,.16);color:#86efac;display:none}
+  .strip.ok .badge{display:inline-block}
+  .badge.show{display:inline-block}
+  .badge.info{background:rgba(59,130,246,.16);color:#93c5fd}
+  .stats{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;align-items:center}
+  .stat{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;
+    background:var(--panel);border:1px solid var(--line);color:var(--text)}
+  .stat.work{color:#93c5fd;border-color:rgba(59,130,246,.35)}
+  .stat.leave{color:#d8b4fe;border-color:rgba(168,85,247,.35)}
+  .stat.done{color:#86efac;border-color:rgba(34,197,94,.35)}
+  .stat.part{color:#fcd34d;border-color:rgba(245,158,11,.35)}
+  .stat.range{font-weight:600;color:var(--muted);background:none;border:none;padding-left:2px}
+  .tbl-wrap{overflow-x:auto;margin-top:12px}
+  .tbl-wrap table{margin-top:0}
+  /* A release is twenty-odd rows; enough to see at once, not enough to bury
+     the rest of the step. */
+  .tbl-wrap.capped{max-height:326px;overflow-y:auto}
+  .tbl-wrap.capped thead th{position:sticky;top:0;background:var(--panel);
+    z-index:1;box-shadow:inset 0 -1px 0 var(--line)}
+  .name-preview{font-size:13px;background:var(--panel2);border:1px solid var(--line);
+    border-radius:9px;padding:9px 12px;margin-top:8px;overflow-x:auto;white-space:nowrap}
+  .name-preview .dim{color:var(--muted)}
+  .modes{display:flex;gap:10px;margin-top:6px}
+  .mode{flex:1;padding:12px;border:1px solid var(--line);border-radius:10px;
+    text-align:center;cursor:pointer;background:var(--panel2);font-size:13px}
+  .mode.active{border-color:var(--accent);background:rgba(59,130,246,.12);color:#fff}
+  .mode-t{font-size:13.5px;font-weight:600}
+  .mode-d{font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.35}
+  .mode.active .mode-d{color:#bfdbfe}
+  table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase}
+  .tag{font-size:10px;padding:2px 7px;border-radius:5px;font-weight:700}
+  .tag.work{background:rgba(59,130,246,.2);color:#93c5fd}
+  .tag.leave{background:rgba(168,85,247,.2);color:#d8b4fe}
+  .tag.ok{background:rgba(34,197,94,.2);color:#86efac}
+  .tag.fail{background:rgba(239,68,68,.2);color:#fca5a5}
+  .muted{color:var(--muted)}
+  .spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);
+    border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+  .req{color:var(--err);margin-left:3px;font-weight:700}
+  .ms-btn{display:flex;align-items:center;justify-content:center;width:100%;
+    background:#fff;color:#3c4043;border:1px solid #8c8c8c;border-radius:9px;
+    padding:11px;font-size:14px;font-weight:600;cursor:pointer;margin-top:14px}
+  .ms-btn:hover{background:#f3f3f3}
+  .or{text-align:center;color:var(--muted);font-size:12px;margin:16px 0 4px}
+  code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:12px}
+  /* A note about the plan: a count you can read at a glance, and the days
+     themselves as chips rather than a comma-separated wall. */
+  .note{margin-top:10px;padding:11px 13px;border-radius:10px;background:var(--panel2);
+    border:1px solid var(--line);border-left-width:3px}
+  .note.warn{border-left-color:var(--warn)}
+  .note.ok{border-left-color:var(--ok)}
+  .note-h{font-size:12.5px;display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}
+  .note-h b{font-weight:600}
+  .note.warn .note-h b{color:#fcd34d}
+  .note.ok .note-h b{color:#86efac}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+  .chip{font-size:11px;padding:3px 8px;border-radius:20px;background:var(--panel);
+    border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+  .lnk{background:none;border:none;margin:0;padding:0;font-size:11.5px;
+    font-weight:600;color:var(--accent);cursor:pointer;margin-left:auto}
+  .lnk:hover{background:none;text-decoration:underline}
+
+  /* ---- step 5: the sub-tasks that will be created ---------------------- */
+  /* Twenty sub-tasks used to be twenty tall cards. One line each reads faster
+     and scrolls less; the days are a click away when you want them. */
+  .planbar{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    flex-wrap:wrap;position:sticky;top:0;z-index:20;padding:11px 13px;
+    margin:0 0 12px;border-radius:11px;background:var(--panel2);
+    border:1px solid var(--line);box-shadow:0 6px 18px rgba(0,0,0,.28)}
+  .planbar-l{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;
+    font-size:12.5px;color:var(--muted)}
+  .planbar-l b{font-size:14px;color:var(--text);font-weight:600}
+  .planbar-l .sep{opacity:.45}
+  .planbar-r{display:flex;align-items:center;gap:8px}
+  .planbar-r button{margin-top:0}
+
+  .grps{display:grid;gap:10px}
+  .grp{background:var(--panel2);border:1px solid var(--line);border-radius:12px;
+    padding:11px 12px}
+  .grp.leave{background:rgba(168,85,247,.07);border-color:rgba(168,85,247,.28)}
+  .grp-top{display:flex;align-items:center;justify-content:space-between;
+    gap:10px;flex-wrap:wrap}
+  .grp-id{display:flex;align-items:baseline;gap:8px;min-width:0}
+  .grp-id .key{font-size:12.5px;font-weight:700;color:#93c5fd;white-space:nowrap}
+  .grp-id .sum{font-size:11.5px;color:var(--muted);overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .grp-r{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:11.5px;
+    color:var(--muted)}
+  .tbadge{font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:20px;
+    background:rgba(59,130,246,.16);color:#93c5fd;white-space:nowrap}
+  .grp.leave .tbadge{background:rgba(168,85,247,.18);color:#d8b4fe}
+
+  /* The rows. Five columns: open, hours, which days, its title, its name. */
+  .st-head,.st{display:grid;gap:10px;align-items:center;
+    grid-template-columns:20px 68px minmax(0,1fr) minmax(0,196px) minmax(0,1.15fr)}
+  .st-head{padding:6px 10px 2px;font-size:9.5px;font-weight:700;
+    letter-spacing:.4px;text-transform:uppercase;color:var(--muted);opacity:.75}
+  .sts{display:grid;gap:5px}
+  .st{background:var(--panel);border:1px solid var(--line);border-radius:9px;
+    padding:7px 10px;font-size:12px}
+  .st.done{border-color:rgba(34,197,94,.45);background:rgba(34,197,94,.07)}
+  .st.fail{border-color:rgba(239,68,68,.45);background:rgba(239,68,68,.07)}
+  .st-x{background:none;border:none;margin:0;padding:0;color:var(--muted);
+    line-height:0;cursor:pointer;border-radius:6px}
+  .st-x:hover{background:rgba(255,255,255,.08);color:var(--text)}
+  .st-x svg{transition:.15s}
+  .st.open .st-x svg{transform:rotate(90deg)}
+  .st-h{font-size:13px;font-weight:700;color:#93c5fd;white-space:nowrap}
+  .st.leave .st-h{color:#d8b4fe}
+  .st-w{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .st-n{font-size:11.5px;color:var(--muted);overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .st-r{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:11px}
+  .st-r .key{color:#93c5fd;font-weight:600}
+  /* The days, and anything else worth a second line, folded away by default. */
+  .st-d{grid-column:1 / -1;display:none;padding:7px 0 2px;border-top:1px solid var(--line);
+    margin-top:6px}
+  .st.open .st-d{display:block}
+  .st-tt{font-size:10.5px;color:var(--muted);margin-bottom:6px;line-height:1.5}
+  .st-tt b{color:#93c5fd;font-weight:600}
+  .st-e{font-size:11px;color:#fca5a5;margin-top:6px;word-break:break-word}
+  .dchips{display:flex;flex-wrap:wrap;gap:4px}
+  .dchip{font-size:10.5px;padding:2px 7px;border-radius:6px;background:var(--panel2);
+    border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+  .dchip b{color:var(--text);font-weight:600}
+  .st.leave .dchip{background:rgba(168,85,247,.10);
+    border-color:rgba(168,85,247,.30);color:#c4b5fd}
+  .st .picker-btn{padding:6px 9px;font-size:11.5px}
+  .st input{padding:6px 9px;font-size:11.5px;border-radius:8px}
+  .st input::placeholder{font-style:italic}
+  @media (max-width:760px){
+    .st-head{display:none}
+    .st{grid-template-columns:20px 68px minmax(0,1fr)}
+    .st > .st-r,.st > .card2-in,.st > .st-n{grid-column:2 / -1}
+  }
+
+  /* ---- step 4: work items ---------------------------------------------- */
+  /* Four short lines beat a paragraph nobody finishes; the calendar's legend
+     and count line say the rest. */
+  .tips{display:grid;grid-template-columns:repeat(auto-fit,minmax(248px,1fr));
+    gap:3px 18px;font-size:11.5px;color:var(--muted);margin:2px 0 2px}
+  .tips b{color:var(--text);font-weight:600;margin-right:5px}
+  /* A day cell has to hold '9h19m' under a date without spilling, so the
+     calendar column is sized from the cell up: 7 x 44px + gaps + padding. */
+  .wi{display:grid;grid-template-columns:minmax(0,356px) minmax(0,1fr);gap:16px;
+    align-items:start;margin-top:12px}
+  @media (max-width:880px){ .wi{grid-template-columns:1fr} }
+  .wi-panel{background:var(--panel2);border:1px solid var(--line);border-radius:12px;
+    padding:14px 15px;min-width:0}
+  .wi-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+  .wi-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+  .wi-dow{font-size:10px;font-weight:700;color:var(--muted);text-align:center;padding:3px 0;
+    text-transform:uppercase}
+  .wi-day{height:47px;border-radius:10px;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;font-size:13.5px;line-height:1.05;background:var(--panel);
+    border:1px solid transparent;cursor:pointer;user-select:none;transition:.12s;
+    padding:3px 1px;overflow:hidden;min-width:0}
+  /* Tabular figures keep '8h4m' and '11h11m' the same width, and the label is
+     clipped rather than allowed to widen the cell. */
+  .wi-day .h{font-size:8.5px;font-weight:700;color:var(--muted);margin-top:3px;
+    letter-spacing:-.1px;white-space:nowrap;font-variant-numeric:tabular-nums;
+    max-width:100%;overflow:hidden}
+  .wi-day.blank{visibility:hidden}
+  .wi-day.off{background:transparent;color:#475569;cursor:default}
+  .wi-day.leave{background:rgba(168,85,247,.13);color:#d8b4fe;cursor:default}
+  .wi-day.leave .h{color:#c084fc}
+  /* Already on the Jira timesheet: nothing to do with it, so it reads as
+     settled rather than as a day you forgot to click. */
+  .wi-day.full{background:transparent;color:#6d7e95;cursor:default;box-shadow:none}
+  .wi-day.full .h{color:#6d7e95;font-weight:600;margin-top:2px}
+  .wi-day.full .h b{font-size:11px;font-weight:700;color:rgba(134,239,172,.6)}
+  /* Logged, but for less than the attendance says: the hours shown are the
+     missing ones, so the amber ring is a nudge, not a warning. */
+  .wi-day.part{box-shadow:inset 0 0 0 1px rgba(245,158,11,.6)}
+  .wi-day.part .h{color:#fcd34d}
+  .wi-day.part.sel .h{color:#fef3c7}
+  /* Only the days you can act on carry an outline, so four clickable days
+     don't disappear among twenty settled ones. */
+  .wi-day.work{box-shadow:inset 0 0 0 1px #3a4b63}
+  .wi-day.work:hover{border-color:var(--accent)}
+  .wi-day.has{background:rgba(34,197,94,.13);box-shadow:inset 0 0 0 1px rgba(34,197,94,.5)}
+  .wi-day.has .h{color:#86efac}
+  .wi-day.sel{background:var(--accent);color:#fff;font-weight:700;box-shadow:none}
+  .wi-day.sel .h{color:#dbeafe}
+  .wi-count{font-size:11.5px;color:var(--muted);margin-top:11px}
+  .wi-count b{color:var(--text);font-weight:600}
+  .wi-legend{display:flex;gap:7px 11px;flex-wrap:wrap;margin-top:8px;font-size:10.5px;
+    color:var(--muted)}
+  .wi-legend span{display:inline-flex;align-items:center;white-space:nowrap}
+  .wi-legend i{width:8px;height:8px;border-radius:3px;display:inline-block;
+    margin-right:4px;flex:0 0 auto}
+  .wi-row{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:11px 12px;margin-bottom:8px}
+  .wi-row.extra{border-color:rgba(59,130,246,.45);background:rgba(59,130,246,.07)}
+  /* minmax(0,...) matters: a plain 1fr grows to its content, so one long
+     ticket summary would squeeze the Task picker down to nothing. */
+  .wi-ed-head{display:flex;align-items:baseline;justify-content:space-between;
+    gap:10px;flex-wrap:wrap}
+  .wi-ed-head .strip-title{font-size:14px}
+  /* Ticket and Task share the first line; the title, which wants the room,
+     gets the second. */
+  .wi-cells{display:grid;gap:10px;align-items:end;
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr) 40px}
+  .wi-cells > .wi-title{grid-column:1 / -1}
+  @media (max-width:520px){
+    .wi-cells{grid-template-columns:minmax(0,1fr) 40px}
+    .wi-cells > div:nth-child(2){grid-column:1}
+  }
+  .wi-cells label{margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wi-cells .picker-btn{min-width:0}
+  /* The button shows the key alone, so the full summary is confirmed here. */
+  .wi-sum{font-size:11.5px;color:var(--muted);margin-top:8px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wi-sum b{color:#93c5fd;font-weight:600}
+  .wi-empty{padding:22px 16px;text-align:center;border:1px dashed var(--line);
+    border-radius:10px;background:var(--panel)}
+  .wi-empty-t{font-size:13.5px;font-weight:600;margin-bottom:4px}
+  .wi-empty-d{font-size:12px;color:var(--muted);line-height:1.5}
+  .wi-x{background:none;border:1px solid var(--line);color:var(--muted);border-radius:9px;
+    padding:10px 11px;margin:0;font-size:12px;font-weight:700;line-height:1}
+  .wi-x:hover{background:rgba(239,68,68,.14);border-color:rgba(239,68,68,.45);color:#fca5a5}
+  .wi-split{display:flex;align-items:center;gap:11px;margin-top:10px}
+  .wi-split input[type=range]{flex:1;padding:0;margin:0;border:none;background:none;
+    accent-color:var(--accent);height:18px;cursor:pointer}
+  .wi-pct{flex:0 0 44px;text-align:right;font-size:12.5px;font-weight:700}
+  .wi-hrs{flex:0 0 110px;width:110px;text-align:center;font-size:13px;font-weight:600;
+    padding:8px 10px}
+  .wi-hrs.bad{border-color:rgba(239,68,68,.55);box-shadow:0 0 0 3px rgba(239,68,68,.12)}
+  .wi-of{font-size:12px;color:var(--muted);flex:1}
+  /* Two ways to divide a day, one control to say which. */
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;
+    overflow:hidden;background:var(--panel)}
+  .seg button{margin:0;border:none;border-radius:0;background:transparent;
+    color:var(--muted);font-size:12.5px;font-weight:600;padding:9px 13px}
+  .seg button:hover{background:rgba(255,255,255,.07);color:var(--text)}
+  .seg button.on{background:var(--accent);color:#fff}
+  .seg-l{font-size:12px;color:var(--muted);align-self:center}
+  /* One footer for the whole editor: the ways to divide a day on the left,
+     the one button that commits it on the right. */
+  /* How the day divides sits with the bar that shows it, which leaves the
+     footer holding just the two things you can do - and those fit one line. */
+  .wi-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .wi-tools button{margin-top:0}
+  .wi-foot{display:flex;align-items:center;justify-content:space-between;
+    gap:10px;margin-top:13px;padding-top:12px;border-top:1px solid var(--line)}
+  .wi-foot button{margin-top:0}
+  .wi-foot #wiCommit{padding:11px 24px}
+  .wi-bar{display:flex;height:7px;border-radius:5px;overflow:hidden;background:var(--panel);
+    margin:11px 0 2px}
+  .wi-bar span{display:block;height:100%}
+  .wi-err{font-size:12px;color:#fca5a5;margin:0 0 8px;display:none;align-items:center;gap:6px}
+  .wi-err.show{display:flex}
+  .wi-name{font-size:12px;color:var(--muted);margin:9px 0 0}
+  .wi-name b{color:var(--text);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><span class="dot"></span> Jira Task Logging</h1>
+  <p class="sub">Create daily sub-tasks, log the hours, and mark them Done — from your attendance sheet.</p>
+
+  <!-- STEP 1: LOGIN -->
+  <div class="card" id="c-login">
+    <h2><span class="step">1</span> Sign in <span class="pill" id="who"></span></h2>
+    <div id="loginForm">
+      <label>Jira URL<span class="req" title="Required">*</span></label>
+      <input id="baseUrl" value="https://tracking.i2cinc.com/">
+
+      <div class="row">
+        <div><label>Username <span class="muted">(blank if using a token)</span></label>
+          <input id="username" placeholder="awahab02" autocomplete="username"></div>
+        <div><label>Password / Personal Access Token<span class="req" title="Required">*</span></label>
+          <input id="password" type="password" autocomplete="current-password"></div>
+      </div>
+      <button id="btnLogin" onclick="login()">Sign in</button>
+    </div>
+    <div class="msg" id="mLogin"></div>
+
+    <div class="or" id="orDivider">— or —</div>
+
+    <!-- Microsoft SSO — handled end to end by the backend -->
+    <button class="ms-btn" id="btnMs" onclick="startMicrosoft()">
+      <svg width="18" height="18" viewBox="0 0 21 21" style="margin-right:8px">
+        <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+        <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+        <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+        <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+      </svg>Sign in with Microsoft
+    </button>
+    <div class="msg" id="mSso"></div>
+    <button class="ghost" id="btnMsCancel" onclick="cancelMicrosoft()"
+            style="display:none">Cancel</button>
+
+    <div class="hint" id="loginHint">Sign in once with your password (or a Personal Access Token).
+      It is kept in Windows Credential Manager, and after that the button above signs
+      you in on its own — nothing to type, nothing opens.</div>
+  </div>
+
+  <!-- STEP 2: SPRINT + ISSUE -->
+  <div class="card disabled" id="c-sprint">
+    <h2><span class="step">2</span> Sprint &amp; issue</h2>
+    <div class="row">
+      <div><label>Scrum Team<span class="req" title="Required">*</span></label><input id="st" placeholder="ST12"></div>
+      <div><label>Release<span class="req" title="Required">*</span></label><input id="release" placeholder="26.08"></div>
+    </div>
+    <div class="strip" id="sprintFound" style="display:none">
+      <div>
+        <div class="strip-title">Sprint <span class="badge" id="sprintBadge">matched</span></div>
+        <div class="hint" id="boardInfo"></div>
+      </div>
+      <div class="strip-actions" id="sprintFields" style="display:none">
+        <div><label style="margin-top:0">Sprint name</label>
+          <input id="sprint" placeholder="type it exactly" readonly></div>
+        <div><label style="margin-top:0">Board id</label>
+          <input id="board" placeholder="optional" readonly></div>
+      </div>
+    </div>
+
+    <button id="btnSprint" onclick="loadSprint()">Find sprint &amp; load issues</button>
+    <div class="hint" id="leaveInfo" style="display:none"></div>
+    <div class="msg" id="mSprint"></div>
+  </div>
+
+  <!-- STEP 3: DATES + HOURS -->
+  <div class="card disabled" id="c-dates">
+    <h2><span class="step">3</span> Dates &amp; attendance</h2>
+
+    <div class="strip" id="attBox">
+      <div>
+        <div class="strip-title">Attendance sheet<span class="req" title="Required">*</span>
+          <span class="badge" id="attBadge">loaded</span></div>
+        <div class="hint" id="attInfo">Fetched attendance sheet from the attendance
+          portal for the release above.</div>
+      </div>
+      <div class="strip-actions">
+        <button id="btnAtt" onclick="fetchAttendance()">Fetch attendance</button>
+        <button class="ghost" id="btnAttCancel" onclick="cancelAttendance()"
+                style="display:none">Cancel</button>
+        <button class="ghost" id="btnAttWindow" onclick="fetchAttendance(true)"
+                style="display:none">Open the portal in a window</button>
+      </div>
+    </div>
+    <div class="msg" id="mAtt"></div>
+
+    <!-- Fallback: only shown if the portal fetch can't be done here. -->
+    <div id="attWrap" style="display:none">
+      <div class="drop" id="drop">Drag &amp; drop your attendance export here, or click to browse
+        <input type="file" id="file" accept=".xlsx,.xls,.csv" style="display:none">
+      </div>
+    </div>
+
+    <div class="row">
+      <div><label>Start date<span class="req" title="Required">*</span></label>
+        <div class="datefield"><input id="start" type="date">
+          <button type="button" class="cal-btn" aria-label="Open calendar"
+                  onclick="openCal('start',event)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></button></div></div>
+      <div><label>End date<span class="req" title="Required">*</span></label>
+        <div class="datefield"><input id="end" type="date">
+          <button type="button" class="cal-btn" aria-label="Open calendar"
+                  onclick="openCal('end',event)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></button></div></div>
+    </div>
+    <div class="hint" id="spanInfo"></div>
+
+
+    <label>How should hours be set?<span class="req" title="Required">*</span></label>
+    <div class="modes">
+      <div class="mode active" data-mode="attendance" onclick="setMode('attendance')">
+        <div class="mode-t">From attendance</div>
+        <div class="mode-d">A full day (9h+) logs the total minus 1h</div>
+      </div>
+      <div class="mode" data-mode="static" onclick="setMode('static')">
+        <div class="mode-t">Static 8h</div>
+        <div class="mode-d">A full day (9h+) logs a flat 8h</div>
+      </div>
+    </div>
+
+    <!-- What Jira already holds for these dates. Read automatically; the
+         button is only there for when you have logged something elsewhere
+         since. -->
+    <div class="strip" id="logBox">
+      <div>
+        <div class="strip-title">Already on your Jira timesheet
+          <span class="badge" id="logBadge">checked</span></div>
+        <div class="hint" id="logInfo">Read from your own worklogs: a day you
+          have already logged in full is left alone, and a day logged for less
+          than the attendance says is topped up with the difference.</div>
+      </div>
+      <div class="strip-actions">
+        <button class="ghost" id="btnLogDays" onclick="toggleLogTable()"
+                style="display:none">Day by day</button>
+        <button class="ghost" id="btnLogged" onclick="checkLogged(true)">Re-check Jira</button>
+      </div>
+    </div>
+    <div class="msg" id="mLogged"></div>
+    <div id="logTable"></div>
+  </div>
+
+  <!-- STEP 4: WORK ITEMS -->
+  <div class="card disabled" id="c-items">
+    <h2><span class="step">4</span> Work items</h2>
+    <div class="tips">
+      <div><b>Pick the days</b> shift-click a run, ctrl-click to add one</div>
+      <div><b>Give them a ticket</b> and a Task — the title is optional</div>
+      <div><b>Two tickets on a day</b> split its hours between them</div>
+      <div><b>Leave and holidays</b> go to Planned Leaves on their own</div>
+    </div>
+
+    <div class="wi">
+      <div class="wi-panel">
+        <div class="wi-head">
+          <div class="cal-title" id="wiMonth">—</div>
+          <div class="cal-nav">
+            <button type="button" onclick="wiMonthStep(-1)">&#8249;</button>
+            <button type="button" onclick="wiMonthStep(1)">&#8250;</button>
+          </div>
+        </div>
+        <div class="wi-grid" id="wiGrid"></div>
+        <div class="wi-count" id="wiCount"></div>
+        <div class="wi-legend">
+          <span><i style="background:var(--panel);box-shadow:inset 0 0 0 1px #3a4b63"></i>needs hours</span>
+          <span><i style="background:transparent;box-shadow:inset 0 0 0 1px rgba(245,158,11,.7)"></i>short</span>
+          <span><i style="background:rgba(34,197,94,.55)"></i>assigned</span>
+          <span><i style="background:rgba(168,85,247,.5)"></i>leave</span>
+          <span><i style="background:transparent;box-shadow:inset 0 0 0 1px rgba(148,163,184,.35)"></i>done</span>
+        </div>
+        <div class="strip-actions" style="margin-top:12px">
+          <button class="ghost" type="button" onclick="wiSelectRest()">Select unassigned</button>
+          <button class="ghost" type="button" onclick="wiClearSel()">Clear</button>
+        </div>
+      </div>
+
+      <div class="wi-panel">
+        <div class="wi-ed-head">
+          <div class="strip-title" id="wiSel">No day selected</div>
+        </div>
+        <div class="hint" id="wiSelHint">Choose a day on the calendar to start.</div>
+        <div id="wiRows" style="margin-top:13px"></div>
+        <div class="wi-tools" id="wiTools" style="display:none">
+          <span class="seg-l">Divide by</span>
+          <span class="seg" id="wiSeg" style="display:none">
+            <button type="button" data-m="pct" onclick="wiSplitBy('pct')">Percent</button>
+            <button type="button" data-m="hrs" onclick="wiSplitBy('hrs')">Hours</button>
+          </span>
+          <button class="ghost" type="button" id="wiEvenBtn" onclick="wiSplitEven()"
+                  style="display:none">Split evenly</button>
+        </div>
+        <div class="wi-bar" id="wiBar" style="display:none"></div>
+        <div class="wi-err" id="wiErr"></div>
+        <div class="wi-foot" id="wiFoot" style="display:none">
+          <button class="ghost" type="button" id="wiAddBtn"
+                  onclick="wiAddRow()">+ Add ticket</button>
+          <button type="button" id="wiCommit" onclick="wiCommit()">Add to plan</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="wiListWrap"></div>
+    <button id="btnPreview" onclick="preview()">Preview plan</button>
+    <div class="msg" id="mItems"></div>
+    <div id="planNotes"></div>
+  </div>
+
+  <!-- STEP 5: PREVIEW + RUN -->
+  <div class="card disabled" id="c-run">
+    <h2><span class="step">5</span> Review &amp; run</h2>
+    <div id="planWrap"></div>
+    <button id="btnRun" onclick="run()" style="background:var(--ok)">Create &amp; log all</button>
+    <button class="ghost" onclick="startOver()">Start over</button>
+    <div class="msg" id="mRun"></div>
+  </div>
+
+  <!-- STEP 6: RESULTS -->
+  <div class="card" id="c-result" style="display:none">
+    <h2><span class="step">6</span> Results</h2>
+    <div id="resultsWrap"></div>
+    <div class="strip-actions" style="margin-top:14px">
+      <button id="btnRetry" onclick="retryFailed()" style="display:none">Retry failed</button>
+      <button class="ghost" id="btnAnother" onclick="logAnother()">Log another task</button>
+      <button class="ghost" onclick="startOver()">Start over</button>
+    </div>
+    <div class="msg" id="mResult"></div>
+  </div>
+</div>
+
+<script>
+let MODE = "attendance";
+let PLAN = [];
+let PLAN_CAP = "24h";      // the most one grouped sub-task may hold
+let LOGGED_IN = false;
+
+const $ = id => document.getElementById(id);
+function show(el, type, text){ const m=$(el); m.className="msg show "+type; m.innerHTML=text; }
+function hide(el){ $(el).className="msg"; }
+function enable(card){ $(card).classList.remove("disabled"); }
+function markDone(card){ $(card).classList.add("done"); }
+async function post(url, body){
+  const r = await fetch(url, {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify(body)});
+  return r.json();
+}
+
+async function login(){
+  const btn=$("btnLogin"); btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Signing in…';
+  hide("mLogin");
+  const res = await post("/api/login", {
+    base_url:$("baseUrl").value, username:$("username").value, password:$("password").value });
+  btn.disabled=false; btn.textContent="Sign in";
+  if(!res.ok){ show("mLogin","err",res.error); return; }
+  onLoggedIn(res.user);
+  if(res.saved) show("mLogin","ok","Signed in as "+res.user+
+    " — password saved to "+res.saved+", so next time just press “Sign in with Microsoft”.");
+}
+
+// The backend opens the sign-in window, watches for the Jira session and
+// adopts it. This page just starts the job and follows its progress.
+let SSO_TIMER = null;
+
+async function startMicrosoft(interactive){
+  const btn=$("btnMs"); btn.disabled=true;
+  btn.innerHTML='<span class="spinner"></span>Signing in with Microsoft…';
+  $("btnMsCancel").style.display="inline-block";
+  hide("mLogin"); show("mSso","info",'<span class="spinner"></span>Starting…');
+  const res = await post("/api/sso/start",
+    {base_url:$("baseUrl").value, interactive:!!interactive});
+  if(!res.ok){ ssoFailed(res.error); return; }
+  SSO_TIMER = setInterval(pollSso, 1200);
+  pollSso();
+}
+
+async function pollSso(){
+  const s = await (await fetch("/api/sso/status")).json();
+  if(s.state==="working"){ show("mSso","info",'<span class="spinner"></span>'+s.message); return; }
+  stopSsoPolling();
+  if(s.state==="done"){ hide("mSso"); onLoggedIn(s.user); }
+  else if(s.state==="error"){ ssoFailed(s.message); }
+  else { hide("mSso"); resetMsButton(); }
+}
+
+async function cancelMicrosoft(){
+  await fetch("/api/sso/cancel", {method:"POST"});
+  stopSsoPolling(); hide("mSso"); resetMsButton();
+}
+
+function stopSsoPolling(){
+  if(SSO_TIMER){ clearInterval(SSO_TIMER); SSO_TIMER=null; }
+  resetMsButton();
+}
+
+function resetMsButton(){
+  const btn=$("btnMs"); btn.disabled=false;
+  btn.innerHTML='<svg width="18" height="18" viewBox="0 0 21 21" style="margin-right:8px">'+
+    '<rect x="1" y="1" width="9" height="9" fill="#f25022"/>'+
+    '<rect x="11" y="1" width="9" height="9" fill="#7fba00"/>'+
+    '<rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>'+
+    '<rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>Sign in with Microsoft';
+  $("btnMsCancel").style.display="none";
+}
+
+function ssoFailed(msg){
+  stopSsoPolling();
+  if(LOGGED_IN){ hide("mSso"); return; }   // already signed in another way — ignore
+  // Everything runs in the backend now, so the only thing left to try is the
+  // username + password above — which is exactly what the message says.
+  show("mSso","err",msg);
+}
+
+
+function onLoggedIn(user){
+  LOGGED_IN = true;
+  stopSsoPolling();
+  hide("mSso");
+  // Signed in: the card collapses to just the green confirmation — the form,
+  // the Microsoft button and the tip have nothing left to offer.
+  ["loginForm","loginHint","orDivider","btnMs","btnMsCancel"].forEach(id=>{
+    const el=$(id); if(el) el.style.display="none";
+  });
+  $("who").textContent = user;
+  show("mLogin","ok","Signed in as "+user);
+  markDone("c-login"); enable("c-sprint");
+}
+
+// MANUAL is switched on only when the ST + release lookup can't find the sprint,
+// so the user is never stuck behind the automatic match.
+let MANUAL = false;
+
+async function loadSprint(){
+  const btn=$("btnSprint"); btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Loading…';
+  hide("mSprint");
+  // Manual mode only counts when a name was actually typed; otherwise fall
+  // back to ST + release, or the backend just answers "enter your ST".
+  const typed = $("sprint").value.trim();
+  const body = (MANUAL && typed) ? {sprint:typed, board:$("board").value.trim()}
+                                 : {st:$("st").value.trim(), release:$("release").value.trim()};
+  if(!body.sprint && !(body.st && body.release)){
+    btn.disabled=false; btn.textContent = MANUAL ? "Load issues" : "Find sprint & load issues";
+    sprintFailed(MANUAL ? "Type the sprint name exactly as Jira shows it, "
+                        + "or fill in the Scrum Team and Release above."
+                        : "Enter your Scrum Team and Release (e.g. ST12 and 26.08).");
+    return;
+  }
+  const res = await post("/api/sprint", body);
+  btn.disabled=false;
+  btn.textContent = MANUAL ? "Load issues" : "Find sprint & load issues";
+  if(!res.ok){ sprintFailed(res.error); return; }
+  if(res.sprint_name) $("sprint").value = res.sprint_name;
+  $("board").value = res.board_id || "";
+  let note = $("sprint").value + (res.board_id ? " · board " + res.board_id : "");
+  if(res.others && res.others.length)
+    note += " — others also matched: " + res.others.join(", ");
+  $("boardInfo").textContent = note;
+  $("sprintFound").style.display = "flex";
+  $("sprintFound").classList.add("ok");
+  $("sprintFields").style.display = MANUAL ? "flex" : "none";
+  // The tickets are held for step 4, where each day gets its own.
+  ISSUES = res.issues || [];
+  TASKS = {}; PROJ = {};
+  ISSUES.forEach(i => { if(i.project) PROJ[i.key] = i.project; });
+  warmTasks();                 // so step 4's Task list is ready before it is asked
+  attInfoText();
+  $("leaveInfo").style.display = "block";
+  $("leaveInfo").textContent = ISSUES.length + " ticket" + (ISSUES.length===1?"":"s") +
+    " loaded. " + (res.leave_parent
+      ? "Leave / holiday days will go under " + res.leave_parent + " (Planned Leaves)."
+      : "No 'Planned Leaves' issue detected in this sprint — leave days can't be routed.");
+  markDone("c-sprint");
+  enable("c-dates");
+  $("c-items").classList.add("disabled");
+  // The release is known now, so go and get the attendance without being asked.
+  if(!ATT_LOADED && !ATT_TIMER) fetchAttendance();
+  refreshDates();
+}
+
+function sprintFailed(msg){
+  show("mSprint","err",msg);
+  // Not being signed in, or not having typed the inputs, says nothing about how
+  // this team names its sprints — only a real lookup miss should unlock manual.
+  if(MANUAL || /not logged in|enter your|type the sprint/i.test(msg||"")) return;
+  // Fall back to typing the sprint name so a naming style we don't know yet
+  // can never block the run.
+  MANUAL = true;
+  $("sprintFound").style.display = "flex";
+  $("sprintFound").classList.remove("ok");
+  $("sprintFields").style.display = "flex";
+  $("sprint").readOnly = false; $("board").readOnly = false;
+  $("sprint").placeholder = "type the exact sprint name";
+  $("board").placeholder = "optional";
+  $("btnSprint").textContent = "Load issues";
+  $("boardInfo").textContent = "You can type the sprint name exactly as Jira shows it.";
+}
+
+// The Task list belongs to the ticket's *project*, so it is cached per
+// project: every other ticket in the sprint then costs nothing at all. Step 2
+// tells us each ticket's project, and warms the first one up in the background,
+// so picking a ticket in step 4 normally shows its Tasks immediately.
+let TASKS = {};        // project (or ticket, if unknown) -> [task names]
+let PROJ = {};         // ticket key -> its project
+async function tasksFor(parent){
+  const key = PROJ[parent] || parent;
+  if(TASKS[key]) return TASKS[key];
+  const res = await post("/api/tasks", {parent, project: PROJ[parent] || ""});
+  if(!res.ok){ show("mItems","err",res.error); return null; }
+  if(res.project) PROJ[parent] = res.project;
+  TASKS[res.project || key] = res.tasks;
+  return res.tasks;
+}
+
+// Fetch one project's Tasks now so the first pick doesn't wait for it. The
+// answer is cached, so this is the only call the whole sprint needs.
+function warmTasks(){
+  const first = ISSUES.find(i => i.key);
+  if(!first) return;
+  const key = PROJ[first.key] || first.key;
+  if(!TASKS[key]) tasksFor(first.key).catch(() => {});
+}
+
+function attInfoText(){
+  const rel = $("release").value.trim();
+  $("attInfo").textContent = "Fetched attendance sheet from the attendance portal for the release "
+    + (rel || "above") + ".";
+}
+// Changing either input is a fresh attempt: drop back out of manual mode so the
+// automatic match is tried again rather than staying stuck on an empty field.
+function sprintInputsChanged(){
+  attInfoText();
+  if(!MANUAL) return;
+  MANUAL = false;
+  $("sprint").value = ""; $("board").value = "";
+  $("sprint").readOnly = true; $("board").readOnly = true;
+  $("sprintFields").style.display = "none";
+  $("sprintFound").style.display = "none";
+  $("btnSprint").textContent = "Find sprint & load issues";
+  hide("mSprint");
+}
+$("release").addEventListener("input", sprintInputsChanged);
+$("st").addEventListener("input", sprintInputsChanged);
+
+function setMode(m){
+  MODE=m;
+  document.querySelectorAll(".mode").forEach(e=>e.classList.toggle("active", e.dataset.mode===m));
+  refreshDates();
+}
+
+// The sheet comes from the portal itself — same browser profile as the Jira
+// sign-in, so it is usually already signed in there too.
+let ATT_TIMER = null;
+
+// The sentence "Read 31 day(s)… 22 work day(s), 3 leave/holiday day(s).
+// Filtered by release 26.08 (2026-07-22 → 2026-08-18)." is a lot to read for
+// four numbers, so it becomes a count badge and a row of pills instead.
+function prettyRange(note){
+  if(!note) return "";
+  const rel = /release\s+([\d.]+)/i.exec(note);
+  const days = note.match(/\d{4}-\d{2}-\d{2}/g) || [];
+  const fmt = iso => new Date(iso+"T00:00:00")
+      .toLocaleDateString(undefined,{day:"numeric",month:"short"});
+  const span = days.length >= 2 ? fmt(days[0]) + " → " + fmt(days[1]) : "";
+  return [rel ? "Release " + rel[1] : "", span].filter(Boolean).join(" · ");
+}
+
+// The release the sheet came from is almost always the range you want to log,
+// so offer it — but never overwrite dates already chosen, and never plan days
+// that haven't happened yet.
+function applyReleaseDates(from, to){
+  if(!from || !to) return;
+  const today = calIso(new Date());
+  if(to > today) to = today;
+  if(from > to) return;
+  if(!$("start").value) $("start").value = from;
+  if(!$("end").value)   $("end").value   = to;
+}
+
+function showAttendanceSummary(days, work, leaves, note){
+  hide("mAtt");
+  $("attBadge").textContent = days ? days + (days === 1 ? " day" : " days") : "loaded";
+  const range = prettyRange(note);
+  $("attInfo").innerHTML =
+    `<div class="stats">
+       <span class="stat work">${work} work</span>
+       <span class="stat leave">${leaves} leave / holiday</span>
+       ${range ? `<span class="stat range">${range}</span>` : ""}
+     </div>`;
+}
+
+async function fetchAttendance(interactive){
+  const btn=$("btnAtt"); btn.disabled=true;
+  btn.innerHTML='<span class="spinner"></span>Fetching…';
+  $("btnAttCancel").style.display="inline-block";
+  $("btnAttWindow").style.display="none";
+  attInfoText();                      // back to the plain line while it works
+  show("mAtt","info",'<span class="spinner"></span>Starting…');
+  const res = await post("/api/attendance/fetch", {
+    release:$("release").value.trim(), start:$("start").value, end:$("end").value,
+    interactive:!!interactive });
+  if(!res.ok){ attFailed(res.error, false); return; }
+  ATT_TIMER = setInterval(pollAttendance, 1500);
+  pollAttendance();
+}
+
+async function pollAttendance(){
+  const s = await (await fetch("/api/attendance/status")).json();
+  if(s.state==="working"){ show("mAtt","info",'<span class="spinner"></span>'+s.message); return; }
+  stopAttPolling();
+  if(s.state==="done"){
+    ATT_LOADED = true; DAYS_KEY = "";      // new sheet -> redraw step 4's days
+    applyReleaseDates(s.range_start, s.range_end);
+    refreshDates();
+    showAttendanceSummary(s.days, s.work_days, s.leave_days, s.note);
+  } else if(s.state==="error"){ attFailed(s.message, s.can_open_window); }
+  else { hide("mAtt"); }
+}
+
+async function cancelAttendance(){
+  await fetch("/api/attendance/cancel", {method:"POST"});
+  stopAttPolling();
+  show("mAtt","info","Cancelled.");
+}
+
+function stopAttPolling(){
+  if(ATT_TIMER){ clearInterval(ATT_TIMER); ATT_TIMER=null; }
+  const btn=$("btnAtt"); btn.disabled=false; btn.textContent="Fetch attendance";
+  $("btnAttCancel").style.display="none";
+  $("btnAttWindow").style.display="none";
+}
+
+function attFailed(msg, canOpenWindow){
+  stopAttPolling();
+  show("mAtt","err",msg);
+  $("btnAttWindow").style.display = canOpenWindow ? "inline-block" : "none";
+  $("attWrap").style.display="block";   // let them drop the export in instead
+  $("btnAtt").textContent="Try the portal again";
+}
+
+// Step 3 is complete once both dates are in and — in attendance mode — the
+// sheet has been read. It un-greens again if a field is cleared.
+let ATT_LOADED = false;
+function datesReady(){
+  if(!$("start").value || !$("end").value) return false;
+  // Both modes read the sheet now — they differ only in what a full day logs —
+  // so neither is complete until the attendance is in.
+  return ATT_LOADED;
+}
+function spanText(){
+  const a = $("start").value, b = $("end").value, out = $("spanInfo");
+  if(!a || !b){ out.textContent = ""; return; }
+  const d0 = new Date(a+"T00:00:00"), d1 = new Date(b+"T00:00:00");
+  if(d1 < d0){ out.textContent = "End date is before the start date."; return; }
+  let days = 0, week = 0;
+  for(let d = new Date(d0); d <= d1; d.setDate(d.getDate()+1)){
+    days++; if(d.getDay() !== 0 && d.getDay() !== 6) week++;
+  }
+  const fmt = t => t.toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"});
+  out.textContent = `${fmt(d0)} → ${fmt(d1)} · ${days} day${days>1?"s":""}, ${week} weekday${week===1?"":"s"}`;
+}
+
+function refreshDates(){
+  spanText();
+  const box = $("attBox");
+  if(box) box.classList.toggle("ok", ATT_LOADED);
+  const ready = datesReady() && ISSUES.length > 0;
+  $("c-dates").classList.toggle("done", datesReady());
+  // Step 4 opens only once step 3 is genuinely complete — dates in and the
+  // attendance read — since the calendar it draws is made from both.
+  $("c-items").classList.toggle("disabled", !ready);
+  if(!ready){
+    // Changing step 3 invalidates anything built from it.
+    $("c-items").classList.remove("done");
+    $("c-run").classList.add("disabled");
+  } else loadDays();
+}
+$("start").onchange = $("end").onchange = refreshDates;
+$("start").oninput = $("end").oninput = refreshDates;
+
+// drag & drop
+const drop=$("drop"), fileInput=$("file");
+drop.onclick=()=>fileInput.click();
+drop.ondragover=e=>{e.preventDefault();drop.classList.add("hover");};
+drop.ondragleave=()=>drop.classList.remove("hover");
+drop.ondrop=e=>{e.preventDefault();drop.classList.remove("hover");
+  if(e.dataTransfer.files.length) uploadFile(e.dataTransfer.files[0]);};
+fileInput.onchange=()=>{ if(fileInput.files.length) uploadFile(fileInput.files[0]); };
+
+async function uploadFile(f){
+  hide("mAtt"); drop.innerHTML='<span class="spinner"></span>Reading '+f.name+'…';
+  const fd=new FormData(); fd.append("file", f);
+  const r=await fetch("/api/attendance",{method:"POST",body:fd});
+  const res=await r.json();
+  if(!res.ok){ drop.innerHTML="Drag &amp; drop your attendance export here, or click to browse";
+    ATT_LOADED=false; refreshDates(); show("mAtt","err",res.error); return; }
+  drop.innerHTML="✓ "+f.name+" loaded";
+  ATT_LOADED=true; DAYS_KEY = "";          // new sheet -> redraw step 4's days
+  refreshDates();
+  showAttendanceSummary(res.total_rows, res.work_days, res.leave_days, "");
+}
+
+// ---- what Jira already has for these dates ------------------------------
+// Read once per date range, before the day map is built: every day the
+// calendar offers is a day that still needs hours. LOG_OK stays false if Jira
+// wouldn't answer, and then nothing is subtracted from anything.
+let LOGGED_KEY = "", LOG_OK = false;
+
+async function checkLogged(force){
+  const a = $("start").value, b = $("end").value;
+  if(!LOGGED_IN || !a || !b || b < a) return;
+  const key = a + "|" + b;
+  if(!force && key === LOGGED_KEY) return;
+  const btn = $("btnLogged");
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Reading Jira';
+  hide("mLogged");
+  const res = await post("/api/logged", {start:a, end:b, force:!!force});
+  btn.disabled = false; btn.textContent = "Re-check Jira";
+  DAYS_KEY = "";                       // the day map is drawn from this answer
+  if(!res.ok){
+    LOGGED_KEY = ""; LOG_OK = false;
+    loggedUnknown();
+    // A Jira that won't answer must not stop the run: say what it means, and
+    // carry on with every day on offer.
+    show("mLogged", "err", "Couldn't read your Jira worklogs: " + esc(res.error) +
+      " Every day is offered as usual, so check the timesheet yourself before " +
+      "running to avoid logging the same hours twice.");
+    return;
+  }
+  LOG_OK = true; LOGGED_KEY = key;
+  if(force) refreshDates();            // the button is asking for a redraw
+}
+
+// The numbers only mean something once the day map has been rebuilt from them,
+// so the strip is filled in there rather than here.
+// Whatever was on the strip has to go when the answer is "we don't know":
+// stale pills reading "4 days complete" are worse than no pills at all.
+function loggedUnknown(){
+  $("logBox").classList.remove("ok");
+  $("logBadge").className = "badge";
+  $("logTable").innerHTML = "";
+  $("btnLogDays").style.display = "none";
+  $("logInfo").textContent = "Couldn't tell what is already logged in Jira " +
+    "\u2014 every working day is on offer below.";
+}
+
+function showLoggedSummary(){
+  const box = $("logBox"), badge = $("logBadge");
+  if(!LOG_OK){ loggedUnknown(); return; }
+  const done = DAYS.filter(d => d.full).length;
+  const part = DAYS.filter(d => d.day_logged && d.left).length;
+  const mins = DAYS.reduce((n, d) => n + (d.day_logged || 0), 0);
+  const short = DAYS.reduce((n, d) => n + (d.day_logged ? d.left : 0), 0);
+  box.classList.toggle("ok", mins > 0);
+  badge.textContent = done ? done + (done === 1 ? " day done" : " days done")
+                           : "nothing logged yet";
+  badge.className = "badge show" + (done ? "" : " info");
+  $("logInfo").innerHTML = mins || done
+    ? `<div class="stats">
+         <span class="stat">${fmtMinutes(mins)} already logged</span>
+         ${done ? `<span class="stat done">${done} day${done === 1 ? "" : "s"} complete</span>` : ""}
+         ${part ? `<span class="stat part">${part} logged short · ${fmtMinutes(short)} to top up</span>` : ""}
+       </div>`
+    : "Nothing logged for these dates yet — every working day is on offer below.";
+  renderLogTable();
+}
+
+// The exact hours, day by day: what Jira holds against what the day is worth
+// in the mode you picked, and what that leaves. Folded away by default, since
+// the calendar usually says enough.
+let LOG_TABLE_OPEN = false;
+
+function toggleLogTable(){
+  LOG_TABLE_OPEN = !LOG_TABLE_OPEN;
+  renderLogTable();
+}
+
+function renderLogTable(){
+  const rows = DAYS.filter(d => d.worth || d.day_logged);
+  const btn = $("btnLogDays"), box = $("logTable");
+  btn.style.display = (LOG_OK && rows.length) ? "inline-block" : "none";
+  btn.textContent = LOG_TABLE_OPEN ? "Hide the list" : "Day by day";
+  if(!LOG_OK || !rows.length || !LOG_TABLE_OPEN){ box.innerHTML = ""; return; }
+  const total = rows.reduce((n, d) => n + (d.day_logged || 0), 0);
+  const owed = rows.reduce((n, d) => n + (d.left || 0), 0);
+  box.innerHTML =
+    `<div class="tbl-wrap capped"><table><thead><tr><th>Date</th><th>In Jira now</th>
+       <th>Day is worth</th><th>Still to log</th></tr></thead><tbody>` +
+    rows.map(d => `<tr>
+       <td>${fmtDay(d.date)}</td>
+       <td>${d.day_logged_hours || '<span class="muted">nothing</span>'}</td>
+       <td>${d.worth_hours || "—"}</td>
+       <td>${d.left ? d.left_hours
+              : (d.worth ? '<span class="tag ok">done</span>' : "—")}</td>
+     </tr>`).join("") +
+    `<tr><td><b>Total</b></td><td><b>${fmtMinutes(total)}</b></td><td></td>
+       <td><b>${owed ? fmtMinutes(owed) : "nothing"}</b></td></tr>` +
+    `</tbody></table></div>`;
+}
+
+// ---- step 4: work items --------------------------------------------------
+// Two pieces of state say everything about this step: DAYS is what the backend
+// says each date is worth, ITEMS is what the user has put on those dates. The
+// calendar, the editor, the table and the plan are all drawn from those two.
+let ISSUES = [];       // [{key, summary}] — the sprint's tickets
+let DAYS   = [];       // [{date, minutes, hours, category, leaves[]}]
+let DAY    = {};       // date -> its DAYS entry
+let ITEMS  = {};       // date -> [{parent, task_value, title, share}]
+let SEL    = [];       // dates currently selected on the calendar
+let ANCHOR = null;     // last plainly-clicked day, for shift-click runs
+let ROWS   = [];       // the editor's rows
+let ROW_SEQ = 0, WI_MONTH = null, DAYS_KEY = "", DAYS_TIMER = null;
+let SPLIT_BY = "pct";  // 'pct' = drag the percentages, 'hrs' = type the hours
+
+const CHEV = '<svg class="picker-chev" width="14" height="14" viewBox="0 0 24 24" ' +
+  'fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">' +
+  '<path d="M6 9l6 6 6-6"/></svg>';
+const SPLIT_COLORS = ["var(--accent)", "var(--ok)", "var(--leave)", "var(--warn)"];
+
+function esc(t){
+  return String(t == null ? "" : t).replace(/[&<>"]/g,
+    c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+}
+function fmtDay(iso){
+  return new Date(iso + "T00:00:00")
+    .toLocaleDateString(undefined, {weekday:"short", day:"numeric", month:"short"});
+}
+function monthOf(iso){
+  const d = iso ? new Date(iso + "T00:00:00") : new Date();
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+function workDates(){ return DAYS.filter(d => d.minutes).map(d => d.date); }
+
+// The day map is asked for once per (range, mode) — typing in a date box fires
+// a lot of events and none of them should cost a request.
+function loadDays(){
+  const key = [$("start").value, $("end").value, MODE].join("|");
+  if(key === DAYS_KEY) return;
+  clearTimeout(DAYS_TIMER);
+  DAYS_TIMER = setTimeout(async () => {
+    // What is already on the timesheet decides what each day still needs, so
+    // it is read before the day map, not after it.
+    await checkLogged();
+    const res = await post("/api/days",
+      {start:$("start").value, end:$("end").value, mode:MODE});
+    if(!res.ok){ show("mItems","err",res.error); return; }
+    DAYS_KEY = key;
+    DAYS = res.days; DAY = {};
+    DAYS.forEach(d => DAY[d.date] = d);
+    // A day that left the range, or stopped being a working day, can't keep
+    // the tickets that were on it.
+    Object.keys(ITEMS).forEach(iso => {
+      if(!DAY[iso] || !DAY[iso].minutes) delete ITEMS[iso]; });
+    SEL = SEL.filter(iso => DAY[iso] && DAY[iso].minutes);
+    showLoggedSummary();
+    wiDraw(); wiRenderList(); wiSelectionChanged(); itemsChanged();
+  }, 200);
+}
+
+// ---- the calendar --------------------------------------------------------
+function wiClampMonth(){
+  if(!DAYS.length) return;
+  const lo = monthOf(DAYS[0].date), hi = monthOf(DAYS[DAYS.length-1].date);
+  if(!WI_MONTH || WI_MONTH < lo || WI_MONTH > hi) WI_MONTH = lo;
+}
+
+function wiDraw(){
+  const grid = $("wiGrid");
+  if(!DAYS.length){ grid.innerHTML = ""; $("wiMonth").textContent = "—"; return; }
+  wiClampMonth();
+  const y = WI_MONTH.getFullYear(), m = WI_MONTH.getMonth();
+  $("wiMonth").textContent = CAL_MONTHS[m] + " " + y;
+  const first = new Date(y, m, 1);
+  const from = new Date(y, m, 1 - first.getDay());   // grid starts on Sunday
+  let html = CAL_DOW.map(d => '<div class="wi-dow">' + d + "</div>").join("");
+  // Only the weeks this month actually reaches into, so the panel doesn't
+  // carry an empty row at the bottom.
+  const span = new Date(y, m + 1, 0).getDate() + first.getDay();
+  for(let i = 0, cells = Math.ceil(span / 7) * 7; i < cells; i++){
+    const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() + i);
+    if(d.getMonth() !== m){ html += '<div class="wi-day blank"></div>'; continue; }
+    const iso = calIso(d), info = DAY[iso], cls = ["wi-day"];
+    let sub = "", tip = "";
+    if(info && info.minutes){
+      cls.push("work");
+      // The hours on the box are the hours still missing, so a day logged
+      // short shows what is left to give rather than the whole day again.
+      sub = info.hours.replace(/\s+/g, "");   // '9h 30m' -> '9h30m', it is a 40px box
+      if(info.logged){
+        cls.push("part");
+        tip = info.logged_hours + " of " + info.target_hours +
+              " already in Jira — " + info.hours + " left to log";
+      }
+      if(ITEMS[iso]) cls.push("has");
+      if(SEL.includes(iso)) cls.push("sel");
+    } else if(info && info.full){
+      // Already logged in full: there is nothing to choose, so there is
+      // nothing to click either.
+      cls.push("full");
+      const had = info.day_logged_hours || info.target_hours;
+      // A settled day carries a tick, not a number: nothing here needs acting
+      // on, and the exact hours are in the tooltip and in step 3's list.
+      sub = '<b>✓</b>';
+      tip = had + " already logged in Jira — nothing left to do";
+    } else if(info && info.leaves.length){
+      cls.push("leave");
+      sub = info.leaves[0].hours.replace(/\s+/g, "");
+      tip = info.leaves[0].title;
+    } else cls.push("off");
+    html += '<div class="' + cls.join(" ") + '" data-iso="' + iso + '" title="' +
+            esc(tip) + '">' +
+            d.getDate() + (sub ? '<span class="h">' + sub + "</span>" : "") + "</div>";
+  }
+  grid.innerHTML = html;
+  grid.querySelectorAll(".wi-day.work").forEach(c => {
+    c.onclick = e => wiDayClick(c.dataset.iso, e);
+  });
+  wiCount();
+}
+
+// One line saying where the range stands, so 'Select unassigned' has an
+// obvious size and the greyed-out days are accounted for.
+function wiCount(){
+  const need = DAYS.filter(d => d.minutes).length;
+  const done = DAYS.filter(d => d.full).length;
+  const mins = DAYS.reduce((n, d) => n + (d.minutes || 0), 0);
+  const bits = [];
+  bits.push(need ? "<b>" + need + (need === 1 ? " day" : " days") + "</b> still " +
+                   "need hours (" + fmtMinutes(mins) + ")"
+                 : "<b>Nothing left to log</b> in this range");
+  if(done) bits.push(done + " done in Jira");
+  $("wiCount").innerHTML = bits.join(" · ");
+}
+
+function wiMonthStep(n){
+  if(!DAYS.length) return;
+  const lo = monthOf(DAYS[0].date), hi = monthOf(DAYS[DAYS.length-1].date);
+  const next = new Date(WI_MONTH.getFullYear(), WI_MONTH.getMonth() + n, 1);
+  // Clamp rather than refuse: a step past either end lands on that end.
+  WI_MONTH = next < lo ? lo : next > hi ? hi : next;
+  wiDraw();
+}
+
+function wiDayClick(iso, ev){
+  const days = workDates();
+  if(ev && ev.shiftKey && ANCHOR){
+    const a = days.indexOf(ANCHOR), b = days.indexOf(iso);
+    if(a >= 0 && b >= 0) SEL = days.slice(Math.min(a,b), Math.max(a,b) + 1);
+  } else if(ev && (ev.ctrlKey || ev.metaKey)){
+    SEL = SEL.includes(iso) ? SEL.filter(x => x !== iso) : SEL.concat(iso);
+    ANCHOR = iso;
+  } else {
+    SEL = (SEL.length === 1 && SEL[0] === iso) ? [] : [iso];
+    ANCHOR = iso;
+  }
+  SEL.sort();
+  wiDraw(); wiSelectionChanged();
+}
+
+function wiSelectRest(){
+  SEL = DAYS.filter(d => d.minutes && !ITEMS[d.date]).map(d => d.date);
+  ANCHOR = SEL[0] || null;
+  if(SEL.length) WI_MONTH = monthOf(SEL[0]);
+  wiDraw(); wiSelectionChanged();
+}
+function wiClearSel(){ SEL = []; ANCHOR = null; wiDraw(); wiSelectionChanged(); }
+
+// ---- the editor ----------------------------------------------------------
+function sigOf(rows){
+  return JSON.stringify((rows || []).map(
+    r => [r.parent, r.task_value, r.title || "", r.share, r.hours || ""]));
+}
+function newRow(){
+  return {id: ++ROW_SEQ, parent:"", task:"", title:"", share:100, mins:0};
+}
+
+// '4h 30m' · '4.5' · '4:30' · '90m' -> minutes. null when it means nothing.
+function parseHours(text){
+  const s = String(text || "").trim().toLowerCase();
+  if(!s) return null;
+  const clock = /^(\d+):([0-5]?\d)$/.exec(s);
+  if(clock) return +clock[1] * 60 + +clock[2];
+  if(/^\d+(\.\d+)?$/.test(s)) return Math.round(parseFloat(s) * 60);
+  const h = /(\d+(?:\.\d+)?)\s*h/.exec(s), m = /(\d+(?:\.\d+)?)\s*m/.exec(s);
+  if(!h && !m) return null;
+  return Math.round((h ? parseFloat(h[1]) * 60 : 0) + (m ? parseFloat(m[1]) : 0));
+}
+
+// Typing hours only means something when every selected day is worth the same;
+// otherwise '4h' would mean a different share of each day.
+function selTotal(){
+  if(!SEL.length) return null;
+  const first = DAY[SEL[0]] ? DAY[SEL[0]].minutes : 0;
+  return SEL.every(iso => DAY[iso] && DAY[iso].minutes === first) ? first : null;
+}
+function splitIsHours(){ return SPLIT_BY === "hrs" && ROWS.length > 1 && !!selTotal(); }
+
+function wiSelectionChanged(){
+  const n = SEL.length;
+  const mins = SEL.reduce((t, iso) => t + (DAY[iso] ? DAY[iso].minutes : 0), 0);
+  $("wiSel").textContent = n === 0 ? "No day selected"
+    : n === 1 ? "Editing " + fmtDay(SEL[0])
+    : n + " days selected";
+  $("wiSelHint").textContent = n === 0
+    ? "Pick a day on the calendar. Shift-click for a run of days, Ctrl-click to add one."
+    : (n === 1 ? (DAY[SEL[0]].hours || "nothing") + " to log" +
+                 (DAY[SEL[0]].logged
+                   ? " (" + DAY[SEL[0]].logged_hours + " of " +
+                     DAY[SEL[0]].target_hours + " already in Jira)" : "")
+               : fmtMinutes(mins) + " across " + n + " days") +
+      (SEL.some(iso => ITEMS[iso]) ? " · already assigned — adding replaces it" : "");
+  // Re-open what is already on the selected days when they agree; otherwise
+  // start from one empty row.
+  const sigs = [...new Set(SEL.map(iso => sigOf(ITEMS[iso])))];
+  if(n && sigs.length === 1 && ITEMS[SEL[0]]){
+    ROWS = ITEMS[SEL[0]].map(r => ({id: ++ROW_SEQ, parent:r.parent,
+      task:r.task_value, title:r.title || "", share:r.share,
+      mins: r.hours ? durationMinutes(r.hours) : 0}));
+    // A day divided by hours reopens on the Hours tab, as it was left.
+    SPLIT_BY = ROWS.length > 1 && ROWS.every(r => r.mins) ? "hrs" : "pct";
+  } else {
+    ROWS = [newRow()];
+    SPLIT_BY = "pct";
+  }
+  if(!selTotal()) SPLIT_BY = "pct";
+  if(SPLIT_BY === "pct" && ROWS.length > 1)
+    splitMinutes(100, ROWS.map(r => r.share)).forEach((pct, i) => ROWS[i].share = pct);
+  wiRenderRows();
+}
+
+function issueSummary(key){
+  const found = ISSUES.find(i => i.key === key);
+  return found ? found.summary : "";
+}
+
+// The summary sits under the row rather than inside the button, so choosing a
+// ticket with a long one can never squeeze the Task picker out of the row.
+function wiSumLine(r){
+  const box = $("rm-" + r.id);
+  if(!box) return;
+  const summary = issueSummary(r.parent);
+  box.innerHTML = summary
+    ? "<b>" + esc(r.parent) + "</b> — " + esc(summary) : "";
+  box.title = summary ? r.parent + " — " + summary : "";
+}
+
+function wiRenderRows(){
+  closePick();
+  const idle = !SEL.length;
+  // Nothing selected: the whole footer goes, rather than leaving an empty
+  // bordered strip where the actions were.
+  $("wiFoot").style.display = idle ? "none" : "flex";
+  ["wiAddBtn", "wiEvenBtn", "wiCommit"].forEach(id =>
+    $(id).style.display = idle ? "none" : "inline-block");
+  if(idle){
+    // Nothing is selected: a form whose contents are thrown away the moment a
+    // day is clicked is worse than an invitation to click one.
+    ROWS = [];
+    $("wiRows").innerHTML =
+      `<div class="wi-empty">
+         <div class="wi-empty-t">Pick a day to start</div>
+         <div class="wi-empty-d">Click a day on the calendar on the left.<br>
+           Shift-click for a run of days · Ctrl-click to add one · or use
+           <b>Select unassigned</b> to take them all.</div>
+       </div>`;
+    $("wiBar").style.display = "none";
+    $("wiErr").className = "wi-err";
+    return;
+  }
+  const multi = ROWS.length > 1;
+  if(!multi) SPLIT_BY = "pct";              // one row owns the whole day anyway
+  const hours = splitIsHours(), dayMins = selTotal() || 0;
+  $("wiRows").innerHTML = ROWS.map((r, i) => `
+    <div class="wi-row${i ? " extra" : ""}">
+      <div class="wi-cells">
+        <div><label>Ticket<span class="req" title="Required">*</span></label>
+          <div class="picker"><select id="ri-${r.id}" data-short="key"
+                 onchange="wiRowChanged(${r.id},'parent')"></select>
+            <button type="button" class="picker-btn empty" id="pb-ri-${r.id}"
+              onclick="openPick('ri-${r.id}',event)"><span class="picker-label">—</span>${CHEV}</button></div></div>
+        <div><label>Task<span class="req" title="Required">*</span></label>
+          <div class="picker"><select id="rt-${r.id}" onchange="wiRowChanged(${r.id},'task')"></select>
+            <button type="button" class="picker-btn empty" id="pb-rt-${r.id}"
+              onclick="openPick('rt-${r.id}',event)"><span class="picker-label">—</span>${CHEV}</button></div></div>
+        <button class="wi-x" type="button" onclick="wiRemoveRow(${r.id})"
+                title="Remove this ticket"${multi ? "" : ' style="visibility:hidden"'}>&#10005;</button>
+        <div class="wi-title"><label>Title <span class="muted">(optional — what
+          you were doing)</span></label>
+          <input id="rn-${r.id}" value="${esc(r.title || "")}"
+                 placeholder="Edit Invoice Screen"
+                 oninput="wiRowChanged(${r.id},'title')"></div>
+      </div>
+      <div class="wi-sum" id="rm-${r.id}"></div>
+      <div class="wi-split"${multi ? "" : ' style="display:none"'}>
+        ${hours
+          ? `<input class="wi-hrs" id="rh-${r.id}" value="${fmtMinutes(r.mins || 0)}"
+                    placeholder="4h 30m" oninput="wiHours(${r.id}, this.value)">
+             <span class="wi-of">of ${fmtMinutes(dayMins)}</span>`
+          : `<input type="range" min="0" max="100" step="5" value="${r.share}"
+                    id="rs-${r.id}" oninput="wiShare(${r.id}, this.value)">`}
+        <span class="wi-pct" id="rp-${r.id}">${
+          hours ? Math.round((r.mins || 0) / dayMins * 100) : r.share}%</span>
+      </div>
+      <div class="wi-name" id="rq-${r.id}"></div>
+    </div>`).join("");
+  ROWS.forEach(r => { fillIssueSelect(r); fillTaskSelect(r); wiSumLine(r); });
+  // The label stays short whatever is selected; the day it applies to is in
+  // the header above and in the tooltip.
+  $("wiAddBtn").title = SEL.length === 1
+    ? "Add a second ticket to " + fmtDay(SEL[0])
+    : "Add a second ticket to the " + SEL.length + " selected days";
+  $("wiEvenBtn").style.display = multi ? "inline-block" : "none";
+  wiUpdateSplit();
+}
+
+function fillIssueSelect(r){
+  const sel = $("ri-" + r.id);
+  if(!sel) return;
+  sel.innerHTML = "";
+  const ph = new Option("Select a ticket", "");
+  ph.disabled = true; ph.selected = true;
+  sel.appendChild(ph);
+  ISSUES.forEach(i => sel.appendChild(new Option(i.key + " — " + i.summary, i.key)));
+  if(r.parent) sel.value = r.parent;
+  syncPick("ri-" + r.id);
+}
+
+async function fillTaskSelect(r){
+  const put = (text, list) => {
+    const sel = $("rt-" + r.id);
+    if(!sel) return null;                       // the row went away meanwhile
+    sel.innerHTML = "";
+    const ph = new Option(text, "");
+    ph.disabled = true; ph.selected = true;
+    sel.appendChild(ph);
+    (list || []).forEach(t => sel.appendChild(new Option(t, t)));
+    return sel;
+  };
+  if(!r.parent){ put("Ticket first"); syncPick("rt-" + r.id); return; }
+  put("Loading…"); syncPick("rt-" + r.id);
+  const tasks = await tasksFor(r.parent);
+  if(!tasks) return;
+  const sel = put("Select a Task", tasks);
+  if(!sel) return;
+  if(r.task && tasks.includes(r.task)) sel.value = r.task; else r.task = "";
+  syncPick("rt-" + r.id);
+  wiUpdateSplit();
+}
+
+function wiAddRow(){
+  ROWS.push(newRow());
+  wiSplitEven();                                 // a new row starts life fair
+  wiRenderRows();
+}
+
+function wiRemoveRow(id){
+  if(ROWS.length < 2) return;
+  ROWS = ROWS.filter(r => r.id !== id);
+  wiSplitEven();
+  wiRenderRows();
+}
+
+function wiRowChanged(id, what){
+  const r = ROWS.find(x => x.id === id);
+  if(!r) return;
+  if(what === "parent"){
+    r.parent = $("ri-" + id).value;
+    syncPick("ri-" + id);
+    wiSumLine(r);
+    r.task = "";
+    fillTaskSelect(r);
+  } else if(what === "task"){
+    r.task = $("rt-" + id).value;
+    syncPick("rt-" + id);
+  } else if(what === "title"){
+    r.title = $("rn-" + id).value;
+    wiSumLine(r);
+  }
+  wiUpdateSplit();
+}
+
+// Swapping the control keeps the division you already had: percentages become
+// the hours they stand for, and hours become the percentages they work out as.
+function wiSplitBy(mode){
+  if(mode === SPLIT_BY) return;
+  const total = selTotal();
+  if(mode === "hrs" && !total){
+    show("mItems", "info", "These days aren't all worth the same hours, so they " +
+      "can only be divided by percentage. Select a single day to type hours.");
+    return;
+  }
+  if(mode === "hrs")
+    splitMinutes(total, ROWS.map(r => ROWS.length > 1 ? r.share : 100))
+      .forEach((m, i) => ROWS[i].mins = m);
+  else if(total)
+    splitMinutes(100, ROWS.map(r => r.mins || 0)).forEach((p, i) => ROWS[i].share = p);
+  SPLIT_BY = mode;
+  hide("mItems");
+  wiRenderRows();
+}
+
+function wiHours(id, text){
+  const r = ROWS.find(x => x.id === id);
+  if(!r) return;
+  const mins = parseHours(text);
+  r.mins = mins == null ? 0 : mins;
+  const box = $("rh-" + id);
+  if(box) box.classList.toggle("bad", text.trim() !== "" && mins === null);
+  wiUpdateSplit();                    // no re-render: you are still typing in it
+}
+
+function wiShare(id, value){
+  const r = ROWS.find(x => x.id === id);
+  if(!r) return;
+  r.share = Number(value);
+  $("rp-" + id).textContent = r.share + "%";
+  wiUpdateSplit();
+}
+
+// Equal shares, with the odd percent handed to the first rows so the total is
+// exactly 100 and never 99.
+function wiSplitEven(){
+  const ones = ROWS.map(() => 1);
+  splitMinutes(100, ones).forEach((p, i) => ROWS[i].share = p);
+  if(splitIsHours())
+    splitMinutes(selTotal(), ones).forEach((m, i) => ROWS[i].mins = m);
+  ROWS.forEach(r => {
+    const slider = $("rs-" + r.id), box = $("rh-" + r.id);
+    if(slider) slider.value = r.share;
+    if(box){ box.value = fmtMinutes(r.mins); box.classList.remove("bad"); }
+  });
+  wiUpdateSplit();
+}
+
+// The same largest-remainder split the backend does, so the hours shown on a
+// row are the hours that row will actually log — not a rounded guess.
+function splitMinutes(total, shares){
+  if(!shares.length) return [];
+  let weights = shares.map(s => Math.max(0, Number(s) || 0));
+  let pool = weights.reduce((a, b) => a + b, 0);
+  if(pool <= 0){ weights = shares.map(() => 1); pool = shares.length; }
+  const exact = weights.map(w => total * w / pool);
+  const out = exact.map(x => Math.floor(x));
+  const order = out.map((_, i) => i)
+    .sort((a, b) => (exact[b] - out[b]) - (exact[a] - out[a]));
+  const left = total - out.reduce((a, b) => a + b, 0);
+  for(let i = 0; i < left; i++) out[order[i % order.length]] += 1;
+  return out;
+}
+
+// Every row says what it will create, under itself — one shared line could only
+// ever describe the first row.
+function wiNameLines(){
+  const multi = ROWS.length > 1;
+  const only = SEL.length === 1 ? DAY[SEL[0]] : null;
+  const mins = splitIsHours()
+    ? ROWS.map(r => r.mins || 0)
+    : (only ? splitMinutes(only.minutes, ROWS.map(r => multi ? r.share : 100)) : null);
+  ROWS.forEach((r, i) => {
+    const box = $("rq-" + r.id);
+    if(!box) return;
+    if(!SEL.length){ box.innerHTML = ""; return; }
+    if(!r.parent || !r.task){
+      box.innerHTML = '<span class="muted">Pick a ticket and a Task ' +
+        '—' + ' the sub-task it will create shows up here.</span>';
+      return;
+    }
+    const name = r.task + (r.title ? "-" + r.title.trim() : "");
+    box.innerHTML = "Sub-task: <b>" + esc(name) + "</b> " +
+      (mins ? '<span class="muted">· ' + fmtMinutes(mins[i]) + " logged</span>"
+            : '<span class="muted">· one per selected day</span>');
+  });
+}
+
+function wiUpdateSplit(){
+  const multi = ROWS.length > 1, hours = splitIsHours(), day = selTotal() || 0;
+
+  $("wiTools").style.display = multi ? "flex" : "none";
+  $("wiSeg").style.display = multi ? "inline-flex" : "none";
+  Array.from($("wiSeg").children).forEach(b =>
+    b.classList.toggle("on", b.dataset.m === SPLIT_BY));
+
+  // Whichever way the day was divided, the bar and the readouts speak percent.
+  const shares = ROWS.map(r =>
+    hours ? (day ? (r.mins || 0) / day * 100 : 0) : r.share);
+  const bar = $("wiBar");
+  bar.style.display = multi ? "flex" : "none";
+  if(multi) bar.innerHTML = shares.map((pct, i) =>
+    '<span style="width:' + Math.max(0, Math.min(100, pct)) + "%;background:" +
+    SPLIT_COLORS[i % SPLIT_COLORS.length] + '"></span>').join("");
+  ROWS.forEach((r, i) => {
+    const out = $("rp-" + r.id);
+    if(out) out.textContent = Math.round(shares[i]) + "%";
+  });
+
+  // The only thing worth an error is a division that doesn't add up. A row not
+  // filled in yet just keeps the button off — no scolding.
+  let problem = "";
+  if(hours){
+    const sum = ROWS.reduce((t, r) => t + (r.mins || 0), 0);
+    if(sum > day)
+      problem = "That is " + fmtMinutes(sum - day) + " more than the day's " +
+                fmtMinutes(day) + ".";
+    else if(sum < day)
+      problem = fmtMinutes(day - sum) + " of " + fmtMinutes(day) +
+                " still to give out.";
+  } else if(multi){
+    const pct = ROWS.reduce((t, r) => t + r.share, 0);
+    if(pct !== 100)
+      problem = "Splits total " + pct + "%, not 100%. Adjust before adding these days.";
+  }
+  const err = $("wiErr");
+  err.className = "wi-err" + (problem ? " show" : "");
+  err.innerHTML = problem ? "&#9888;&nbsp; " + problem : "";
+
+  wiNameLines();
+  $("wiCommit").disabled = !SEL.length || !ROWS.length || !!problem ||
+    ROWS.some(r => !r.parent || !r.task);
+}
+
+function wiCommit(){
+  hide("mItems");
+  const multi = ROWS.length > 1, hours = splitIsHours(), day = selTotal() || 0;
+  const rows = ROWS.map(r => {
+    // The title travels with the day. Days that group into one sub-task can
+    // carry different ones, and the preview then offers them as its name.
+    const row = {parent:r.parent, task_value:r.task,
+                 title:(r.title || "").trim()};
+    if(hours){
+      // The weight is the exact fraction of the day, so the backend's own split
+      // reproduces the hours typed here to the minute.
+      row.share = (r.mins || 0) / day * 100;
+      row.hours = fmtMinutes(r.mins || 0);
+    } else row.share = multi ? r.share : 100;
+    return row;
+  });
+  let n = 0;
+  SEL.forEach(iso => {
+    if(DAY[iso] && DAY[iso].minutes){
+      ITEMS[iso] = rows.map(r => Object.assign({}, r));
+      n++;
+    }
+  });
+  SEL = []; ANCHOR = null;
+  wiDraw(); wiRenderList(); wiSelectionChanged(); itemsChanged();
+  show("mItems", "ok", n + " day" + (n === 1 ? "" : "s") + " added to the plan.");
+}
+
+// ---- what has been assigned so far ---------------------------------------
+// Consecutive working days carrying the same ticket(s) collapse into one line,
+// so assigning a whole sprint reads as one row rather than twenty.
+function wiGroups(){
+  const groups = [], days = workDates();
+  Object.keys(ITEMS).sort().forEach(iso => {
+    const sig = sigOf(ITEMS[iso]), last = groups[groups.length - 1];
+    const prev = last && last.dates[last.dates.length - 1];
+    const adjacent = prev && days[days.indexOf(prev) + 1] === iso;
+    if(last && last.sig === sig && adjacent) last.dates.push(iso);
+    else groups.push({sig, dates:[iso], rows: ITEMS[iso]});
+  });
+  return groups;
+}
+
+function groupLabel(g){
+  const a = g.dates[0], b = g.dates[g.dates.length - 1];
+  return a === b ? fmtDay(a)
+    : fmtDay(a) + " → " + fmtDay(b) +
+      ' <span class="muted">· ' + g.dates.length + " days</span>";
+}
+
+function loggedNote(){
+  const done = DAYS.filter(d => d.full).length;
+  return done ? " " + done + " day" + (done === 1 ? " is" : "s are") +
+    " already on your Jira timesheet and left out." : "";
+}
+
+function wiRenderList(){
+  const box = $("wiListWrap"), groups = wiGroups();
+  if(!groups.length){
+    box.innerHTML =
+      `<div class="strip" style="margin-top:14px"><div>
+         <div class="strip-title">Nothing assigned yet</div>
+         <div class="hint">Pick days on the calendar and give them a ticket — the
+           plan builds up here.${loggedNote()}</div></div></div>`;
+    return;
+  }
+  const assigned = Object.keys(ITEMS).length, total = workDates().length;
+  const left = total - assigned;
+  const rows = groups.map((g, gi) => g.rows.map((r, ri) => `<tr>
+      ${ri ? "" : `<td rowspan="${g.rows.length}">${groupLabel(g)}</td>`}
+      <td>${r.parent}</td>
+      <td>${esc(r.task_value)}</td>
+      <td class="muted">${esc(r.title) || "—"}</td>
+      <td>${r.hours || Math.round(r.share) + "%"}</td>
+      ${ri ? "" : `<td rowspan="${g.rows.length}"><button class="wi-x" type="button"
+        title="Remove these days" onclick="wiRemoveGroup(${gi})">&#10005;</button></td>`}
+    </tr>`).join("")).join("");
+  box.innerHTML =
+    `<div class="strip ${left ? "" : "ok"}" style="margin-top:14px">
+       <div><div class="strip-title">Work items
+         <span class="badge ${left ? "info show" : ""}">${assigned} of ${total} work days</span></div>
+         <div class="hint">${(left
+           ? left + " working day" + (left === 1 ? "" : "s") + " still unassigned — they will be skipped."
+           : "Every working day that still needs hours has a ticket.") + loggedNote()}</div></div>
+     </div>
+     <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Ticket</th><th>Task</th>
+     <th>Title</th><th>Split</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function wiRemoveGroup(i){
+  const g = wiGroups()[i];
+  if(!g) return;
+  g.dates.forEach(iso => delete ITEMS[iso]);
+  wiDraw(); wiRenderList(); wiSelectionChanged(); itemsChanged();
+}
+
+// Changing the work items invalidates any plan built from the old ones.
+function itemsChanged(){
+  const any = Object.keys(ITEMS).length > 0;
+  $("c-items").classList.toggle("done", any);
+  $("btnPreview").disabled = !any;
+  PLAN = [];
+  $("planWrap").innerHTML = "";
+  $("planNotes").innerHTML = "";
+  $("c-run").classList.add("disabled");
+}
+
+// ---- step 5: preview ------------------------------------------------------
+async function preview(){
+  hide("mItems");
+  if(!Object.keys(ITEMS).length){
+    show("mItems", "err", "Give at least one day a ticket first."); return; }
+  const btn = $("btnPreview");
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Building…';
+  const res = await post("/api/plan", {items:ITEMS, start:$("start").value,
+                                       end:$("end").value, mode:MODE});
+  btn.disabled = false; btn.textContent = "Preview plan";
+  if(!res.ok){ show("mItems", "err", res.error); return; }
+  PLAN = res.plan;
+  RESULTS = [];
+  // Titles given before a re-preview belong to the same sub-tasks afterwards.
+  PLAN.forEach((e, i) => {
+    const kept = TITLES[titleKey(e)];
+    if(kept != null && kept !== e.label){ e._i = i; planTitle(i, kept); }
+  });
+  if(res.cap) PLAN_CAP = res.cap;
+  if(!PLAN.length){ show("mItems", "info", "Nothing to create for these days."); return; }
+  planNotes(res);
+  renderPlan();
+  markDone("c-items"); enable("c-run");
+  $("c-run").scrollIntoView({behavior:"smooth"});
+}
+
+// What the plan left out, said once and legibly: a count, then the days
+// themselves as chips. A long list folds away rather than filling the page.
+let NOTE_SEQ = 0;
+
+function planNotes(res){
+  const box = $("planNotes"), out = [];
+  const un = res.unassigned || [], al = res.already || [];
+  if(un.length)
+    out.push(noteCard("warn", un.length + " working day" + (un.length === 1 ? "" : "s") +
+      " with no ticket", "nothing will be created for " +
+      (un.length === 1 ? "it" : "them"), un, true));
+  if(al.length)
+    out.push(noteCard("ok", al.length + " day" + (al.length === 1 ? "" : "s") +
+      " already on your Jira timesheet", "left untouched", al, al.length <= 8));
+  box.innerHTML = out.join("");
+}
+
+function noteCard(kind, head, tail, dates, open){
+  const id = "nc" + (++NOTE_SEQ);
+  const fold = dates.length > 8;
+  return `<div class="note ${kind}">
+      <div class="note-h"><b>${esc(head)}</b>
+        <span class="muted">— ${esc(tail)}</span>
+        ${fold ? `<button type="button" class="lnk" onclick="toggleNote('${id}',this)"
+            >${open ? "hide the days" : "show the days"}</button>` : ""}</div>
+      <div class="chips" id="${id}"${open ? "" : ' style="display:none"'}>${
+        dates.map(d => `<span class="chip">${esc(fmtDay(d))}</span>`).join("")}</div>
+    </div>`;
+}
+
+function toggleNote(id, btn){
+  const box = $(id), shown = box.style.display !== "none";
+  box.style.display = shown ? "none" : "flex";
+  btn.textContent = shown ? "show the days" : "hide the days";
+}
+
+const CARET = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" ' +
+  'stroke="currentColor" stroke-width="2.4" stroke-linecap="round">' +
+  '<path d="M9 6l6 6-6 6"/></svg>';
+
+function renderPlan(){
+  const work = PLAN.filter(e => e.kind === "work");
+  const leave = PLAN.filter(e => e.kind === "leave");
+  const mins = PLAN.reduce((n, e) => n + durationMinutes(e.logged), 0);
+  const days = PLAN.reduce((n, e) => n + (e.logs ? e.logs.length : 1), 0);
+  // The bar stays put while you scroll the list, so the totals and the button
+  // are in reach however many sub-tasks there are.
+  $("planWrap").innerHTML =
+    `<div class="planbar">
+       <div class="planbar-l">
+         <b>${PLAN.length} sub-task${PLAN.length === 1 ? "" : "s"}</b>
+         <span class="sep">·</span><span>${fmtMinutes(mins)}</span>
+         <span class="sep">·</span><span>${days} work log${days === 1 ? "" : "s"}</span>
+         <span class="sep">·</span><span>${work.length} work, ${leave.length} leave</span>
+       </div>
+       <div class="planbar-r">
+         <button class="ghost" type="button" id="btnDays"
+                 onclick="planToggleAll()">Show the days</button>
+       </div>
+     </div>
+     <div class="grps">${planGroups()}</div>`;
+  syncTitlePickers();
+}
+
+// The <select>s are the page's own picker, so their buttons need a nudge to
+// show the chosen title once the HTML is in place.
+function syncTitlePickers(){
+  PLAN.forEach((e, i) => {
+    const sel = $("ts-" + i);
+    if(!sel) return;
+    sel.value = e.label || "";
+    syncPick("ts-" + i);
+  });
+}
+
+// 'Mon, Jul 27 – Fri, Jul 31', or the one day on its own.
+function spanOf(dates){
+  if(!dates.length) return "";
+  const a = dates[0], b = dates[dates.length - 1];
+  return a === b ? fmtDay(a) : fmtDay(a) + " – " + fmtDay(b);
+}
+
+// A chip per day: the day, and what will be logged against it.
+function dayChips(logs){
+  let month = "";
+  return (logs || []).map(l => {
+    const d = new Date(l.date + "T00:00:00");
+    const mon = d.toLocaleDateString(undefined, {month:"short"});
+    const dow = d.toLocaleDateString(undefined, {weekday:"short"});
+    const same = mon === month;
+    month = mon;
+    return '<span class="dchip">' + dow + " " + d.getDate() +
+           (same ? "" : " " + mon) + " <b>" + esc(l.hours) + "</b></span>";
+  }).join("");
+}
+
+// One panel per ticket + Task - which is what a sub-task is grouped by. Leave
+// and holidays share a panel of their own, one sub-task each.
+function planGroups(){
+  const groups = [], seen = {};
+  PLAN.forEach((e, i) => {
+    const key = e.kind === "leave" ? "\u0000leave"
+              : [e.parent, e.task_value].join("\u0000");
+    if(seen[key] === undefined){
+      seen[key] = groups.length;
+      groups.push({kind:e.kind, parent:e.parent, task:e.task_value, items:[]});
+    }
+    groups[seen[key]].items.push(Object.assign({_i:i}, e));
+  });
+  return groups.map(g => {
+    const mins = g.items.reduce((n, e) => n + durationMinutes(e.logged), 0);
+    const leave = g.kind === "leave";
+    const bulk = g.items.length > 1 && !RESULTS.length;
+    return `<div class="grp${leave ? " leave" : ""}">
+        <div class="grp-top">
+          <div class="grp-id">
+            <span class="key">${esc(g.parent || "")}</span>
+            <span class="sum">${esc(leave ? "leave and public holidays"
+                                          : issueSummary(g.parent))}</span>
+          </div>
+          <div class="grp-r">
+            <span class="tbadge">${esc(leave ? "Planned Leaves" : (g.task || ""))}</span>
+            ${g.items.length > 1
+               ? `<span>${fmtMinutes(mins)} · ${g.items.length} sub-tasks</span>`
+               : ""}
+            ${bulk ? `<button type="button" class="lnk"
+                onclick="planTitleAll('${g.items.map(x => x._i).join(",")}')"
+                title="Give every sub-task here the first one's title"
+              >same title for all</button>` : ""}
+          </div>
+        </div>
+        <div class="st-head"><span></span><span>hours</span><span>which days</span>
+          <span>${RESULTS.length ? "result" : "title"}</span><span>name in Jira</span></div>
+        <div class="sts">${g.items.map((e, i) =>
+          subtaskRow(e, i, g.items.length)).join("")}</div>
+      </div>`;
+  }).join("");
+}
+
+// One sub-task, one line: what it is worth, which days it holds, its title and
+// the name Jira will get. The days themselves fold out underneath.
+function subtaskRow(e, i, n){
+  const logs = e.logs || [{date:e.date, hours:e.logged}];
+  const res = RESULTS.length ? (RESULTS[e._i] || {}).row : null;
+  const failed = res && !res.ok;
+  const mixed = (e.titles || []).length > 1;
+  const cls = (e.kind === "leave" ? " leave" : "") +
+              (!res ? "" : res.ok ? " done" : " fail") +
+              (failed || mixed ? " open" : "");
+  const what = e.kind === "leave" ? esc(e.title)
+    : spanOf(logs.map(l => l.date)) +
+      (logs.length > 1 ? ` <span class="muted">· ${logs.length} days</span>` : "");
+  return `<div class="st${cls}" id="st-${e._i}">
+      <button class="st-x" type="button" onclick="planToggle(${e._i})"
+              title="Show the days">${CARET}</button>
+      <span class="st-h">${e.logged || "\u2014"}</span>
+      <span class="st-w">${what}</span>
+      ${res ? `<span class="st-r">
+            <span class="tag ${res.ok ? "ok" : "fail"}">${res.ok ? "done" : "failed"}</span>
+            ${res.key ? `<span class="key">${esc(res.key)}</span>` : ""}
+            ${res.logged_dates && res.logged_dates.length && !res.ok
+               ? `<span class="muted">${res.logged_dates.length}/${logs.length} logged</span>`
+               : ""}</span>`
+          : titleControl(e)}
+      <span class="st-n" id="tn-${e._i}" title="${esc(planName(e))}">${esc(planName(e))}</span>
+      <div class="st-d" id="sd-${e._i}">
+        ${mixed ? `<div class="st-tt">These days were given ${e.titles.length}
+            titles: ${e.titles.map(t => "<b>" + esc(t.label) + "</b> " + t.hours)
+            .join(" · ")}</div>` : ""}
+        <div class="dchips">${dayChips(logs)}</div>
+        ${failed && res.error ? `<div class="st-e">${esc(res.error)}</div>` : ""}
+      </div>
+    </div>`;
+}
+
+function planToggle(i){
+  const row = $("st-" + i);
+  if(row) row.classList.toggle("open");
+}
+
+// One switch for the lot, for when you want to read every day at once.
+function planToggleAll(){
+  const rows = Array.from(document.querySelectorAll("#planWrap .st"));
+  const anyShut = rows.some(r => !r.classList.contains("open"));
+  rows.forEach(r => r.classList.toggle("open", anyShut));
+  const btn = $("btnDays");
+  if(btn) btn.textContent = anyShut ? "Hide the days" : "Show the days";
+}
+
+// The title of a sub-task: pick from the titles its own days were given, or
+// type one. With no titles at all it is a plain box - and staying empty is a
+// perfectly good answer, in which case the name is just the Task.
+function titleControl(e){
+  const i = e._i, label = (e.label || "").trim();
+  const opts = (e.titles || []).map(t => t.label);
+  if(label && opts.indexOf(label) < 0) opts.push(label);   // a name from elsewhere
+  if(e._typing || !opts.length)
+    return `<div class="card2-in">
+        <input id="tt-${i}" value="${esc(label)}"
+               placeholder="Title (optional)"
+               oninput="planTitle(${i}, this.value)"></div>`;
+  const hours = {};
+  (e.titles || []).forEach(t => { hours[t.label] = t.hours; });
+  return `<div class="card2-in">
+      <div class="picker"><select id="ts-${i}" data-short="key"
+             onchange="planTitlePick(${i})">
+          <option value="">No title \u2014 just ${esc(e.task_value || "")}</option>
+          ${opts.map(o => `<option value="${esc(o)}">${esc(o)}${
+              hours[o] ? " \u2014 " + hours[o] + " of this sub-task" : ""
+            }</option>`).join("")}
+          <option value="\u0001custom">Type another title\u2026</option>
+        </select>
+        <button type="button" class="picker-btn" id="pb-ts-${i}"
+          onclick="openPick('ts-${i}',event)"><span class="picker-label">\u2014</span>${CHEV}</button>
+      </div></div>`;
+}
+
+function planTitlePick(i){
+  const sel = $("ts-" + i);
+  if(!sel) return;
+  if(sel.value === "\u0001custom"){        // hand over to a plain box
+    if(PLAN[i]) PLAN[i]._typing = true;
+    renderPlan();
+    const box = $("tt-" + i);
+    if(box) box.focus();
+    return;
+  }
+  syncPick("ts-" + i);
+  planTitle(i, sel.value);
+}
+
+// The name Jira will get, worked out the same way the backend works it out:
+// the Task, plus the title if there is one. The days it holds are its work
+// logs, so they are not repeated in the name.
+function planName(e){
+  return summaryBase(e.task_value, e.label) || e.title || "";
+}
+function summaryBase(task, label){
+  label = String(label == null ? "" : label).trim();
+  if(!task) return label;
+  return label ? task + "-" + label : task;
+}
+
+// A sub-task is recognised by its ticket, Task and first day, which is what
+// survives a rebuild of the plan - so titles chosen here come back with it.
+let TITLES = {};
+function titleKey(e){
+  return [e.parent, e.task_value, (e.dates || [e.date])[0]].join("|");
+}
+
+// Naming one sub-task. The row is not re-rendered, so a box being typed in
+// keeps the cursor; only the name follows.
+function planTitle(i, value){
+  const e = PLAN[i];
+  if(!e) return;
+  e.label = value;
+  TITLES[titleKey(e)] = value;
+  e.title = summaryBase(e.task_value, value) || e.title;
+  e.summary = planName(e);
+  const out = $("tn-" + i);
+  if(out){ out.textContent = e.summary; out.title = e.summary; }
+}
+
+// A ticket packed into several sub-tasks usually wants one title across them,
+// so the first one's title can be handed to the rest in a click.
+function planTitleAll(list){
+  const idx = String(list).split(",").map(Number).filter(n => !isNaN(n));
+  if(!idx.length) return;
+  const label = PLAN[idx[0]] ? (PLAN[idx[0]].label || "") : "";
+  idx.forEach(i => planTitle(i, label));
+  renderPlan();                     // every row shows the name it now has
+}
+
+// '8h 30m' -> 510, so the plan can be totalled up.
+function durationMinutes(text){
+  if(!text) return 0;
+  const h = /(\d+)\s*h/.exec(text), m = /(\d+)\s*m/.exec(text);
+  return (h ? +h[1]*60 : 0) + (m ? +m[1] : 0);
+}
+function fmtMinutes(total){
+  const h = Math.floor(total/60), m = total%60;
+  return h && m ? `${h}h ${m}m` : h ? `${h}h` : `${m}m`;
+}
+
+// ---- step 6: run and results ---------------------------------------------
+let RESULTS = [];      // [{entry, row}] — the plan, and how each entry went
+
+// One place that knows what the run button should say.
+function runBusy(on, text){
+  const b = $("btnRun");
+  if(!b) return;
+  b.disabled = on;
+  if(on) b.innerHTML = '<span class="spinner"></span>' + text;
+  else b.textContent = "Create & log all";
+}
+
+async function run(){
+  runBusy(true, "Creating " + PLAN.length + " sub-tasks\u2026");
+  hide("mRun");
+  const res = await post("/api/run", {plan:PLAN});
+  if(!res.ok){ runBusy(false); show("mRun", "err", res.error); return; }
+  RESULTS = PLAN.map((entry, i) => ({entry, row: res.results[i]}));
+  showResults();
+}
+
+function showResults(){
+  const rows = RESULTS.map(r => r.row);
+  const ok = rows.filter(r => r.ok).length, failed = rows.length - ok;
+  const logs = rows.reduce((n, r) => n + ((r.logged_dates || []).length), 0);
+  const want = PLAN.reduce((n, e) => n + (e.logs ? e.logs.length : 1), 0);
+  $("c-result").style.display = "block";
+  $("c-result").classList.toggle("done", !failed);
+  // The same grouping the preview showed, now carrying what happened to each
+  // sub-task - so the thing you approved is the thing you are reading back.
+  $("resultsWrap").innerHTML =
+    `<div class="strip ${failed ? "" : "ok"}">
+       <div><div class="strip-title">Finished
+         <span class="badge ${failed ? "info show" : ""}">${ok} done${failed ? " · " + failed + " failed" : ""}</span></div>
+         <div class="hint">${logs} of ${want} work log${want === 1 ? "" : "s"} written.
+           ${failed
+           ? "Retry failed re-runs only the sub-tasks below that failed, and each picks up where it stopped — a sub-task whose work logs stopped half way gets only the days it is still missing."
+           : "Every sub-task was created, logged day by day and moved to Done."}</div></div>
+     </div>
+     <div style="margin-top:14px">${planGroups()}</div>`;
+  $("btnRetry").style.display = failed ? "inline-block" : "none";
+  runBusy(false);
+  $("btnRun").disabled = true;        // it has run; there is nothing to repeat
+  show("mRun", failed ? "info" : "ok",
+       ok + " of " + rows.length + " sub-tasks created, " + logs +
+       " work log" + (logs === 1 ? "" : "s") + " written.");
+  $("c-result").scrollIntoView({behavior:"smooth"});
+}
+
+// Only the failures go again, and each carries what it already managed — so a
+// sub-task that was created but not logged gets logged, not recreated.
+async function retryFailed(){
+  const pending = RESULTS.filter(r => !r.row.ok);
+  if(!pending.length) return;
+  const btn = $("btnRetry");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Retrying ' + pending.length + '…';
+  hide("mResult");
+  const res = await post("/api/run",
+    {plan: pending.map(r => Object.assign({}, r.entry, {_row: r.row}))});
+  btn.disabled = false; btn.textContent = "Retry failed";
+  if(!res.ok){ show("mResult", "err", res.error); return; }
+  pending.forEach((r, i) => { if(res.results[i]) r.row = res.results[i]; });
+  showResults();
+}
+
+// ---- date picker ---------------------------------------------------------
+// The inputs stay <input type="date">, so their value is still ISO and every
+// other bit of code is untouched; only the popup is ours.
+const CAL_MONTHS = ["January","February","March","April","May","June","July",
+                    "August","September","October","November","December"];
+const CAL_DOW = ["Su","Mo","Tu","We","Th","Fr","Sa"];
+let CAL = null, CAL_FOR = null, CAL_VIEW = null;
+
+function calIso(d){
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") +
+         "-" + String(d.getDate()).padStart(2,"0");
+}
+
+function calRoot(){
+  if(CAL) return CAL;
+  CAL = document.createElement("div");
+  CAL.className = "cal";
+  document.body.appendChild(CAL);
+  document.addEventListener("mousedown", e=>{
+    if(CAL.classList.contains("show") && !CAL.contains(e.target) &&
+       !(e.target.closest && e.target.closest(".cal-btn"))) closeCal();
+  });
+  document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeCal(); });
+  window.addEventListener("resize", closeCal);
+  return CAL;
+}
+
+function closeCal(){ if(CAL) CAL.classList.remove("show"); CAL_FOR = null; }
+
+function openCal(id, ev){
+  if(ev){ ev.preventDefault(); ev.stopPropagation(); }
+  const el = calRoot(), input = $(id);
+  if(CAL_FOR === id && el.classList.contains("show")) return closeCal();
+  CAL_FOR = id;
+  const cur = input.value ? new Date(input.value + "T00:00:00") : new Date();
+  CAL_VIEW = new Date(cur.getFullYear(), cur.getMonth(), 1);
+  drawCal();
+  const r = input.getBoundingClientRect();
+  const maxLeft = window.scrollX + document.documentElement.clientWidth - 296;
+  el.style.top  = (r.bottom + window.scrollY + 6) + "px";
+  el.style.left = Math.max(8, Math.min(r.left + window.scrollX, maxLeft)) + "px";
+  el.classList.add("show");
+}
+
+function drawCal(){
+  const el = calRoot(), input = $(CAL_FOR);
+  const y = CAL_VIEW.getFullYear(), m = CAL_VIEW.getMonth();
+  const first = new Date(y, m, 1);
+  const from = new Date(y, m, 1 - first.getDay());   // grid starts on Sunday
+  const today = calIso(new Date()), picked = input.value;
+
+  let cells = CAL_DOW.map(d=>`<div class="cal-dow">${d}</div>`).join("");
+  for(let i=0; i<42; i++){
+    const d = new Date(from.getFullYear(), from.getMonth(), from.getDate()+i);
+    const iso = calIso(d), cls = ["cal-day"];
+    if(d.getMonth() !== m) cls.push("out");
+    if(iso === today)  cls.push("today");
+    if(iso === picked) cls.push("sel");
+    cells += `<div class="${cls.join(' ')}" data-iso="${iso}">${d.getDate()}</div>`;
+  }
+  el.innerHTML =
+    `<div class="cal-head">
+       <div class="cal-title">${CAL_MONTHS[m]} ${y}</div>
+       <div class="cal-nav"><button type="button" data-step="-1">&#8249;</button>
+       <button type="button" data-step="1">&#8250;</button></div>
+     </div>
+     <div class="cal-grid">${cells}</div>
+     <div class="cal-foot"><button type="button" data-act="clear">Clear</button>
+       <button type="button" data-act="today">Today</button></div>`;
+
+  el.querySelectorAll("[data-step]").forEach(b=>{
+    b.onclick = ()=>{ CAL_VIEW = new Date(y, m + Number(b.dataset.step), 1); drawCal(); };
+  });
+  el.querySelectorAll(".cal-day").forEach(c=>{ c.onclick = ()=>pickDate(c.dataset.iso); });
+  el.querySelector("[data-act=clear]").onclick = ()=>pickDate("");
+  el.querySelector("[data-act=today]").onclick = ()=>pickDate(calIso(new Date()));
+}
+
+function pickDate(iso){
+  const input = $(CAL_FOR);
+  input.value = iso;
+  // Let the existing handlers (step 3's completion check) see the change.
+  input.dispatchEvent(new Event("input",  {bubbles:true}));
+  input.dispatchEvent(new Event("change", {bubbles:true}));
+  closeCal();
+}
+
+// ---- dropdowns -----------------------------------------------------------
+// The <select> elements stay put — they still hold the value and fire change —
+// so nothing else in the page had to be rewritten. Only the list is ours.
+let PICK = null, PICK_FOR = null;
+
+function pickRoot(){
+  if(PICK) return PICK;
+  PICK = document.createElement("div");
+  PICK.className = "picker-list";
+  document.body.appendChild(PICK);
+  document.addEventListener("mousedown", e=>{
+    if(PICK.classList.contains("show") && !PICK.contains(e.target) &&
+       !(e.target.closest && e.target.closest(".picker-btn"))) closePick();
+  });
+  document.addEventListener("keydown", e=>{ if(e.key==="Escape") closePick(); });
+  window.addEventListener("resize", closePick);
+  return PICK;
+}
+
+function closePick(){
+  if(PICK) PICK.classList.remove("show");
+  if(PICK_FOR) $("pb-"+PICK_FOR).classList.remove("open");
+  PICK_FOR = null;
+}
+
+function openPick(name, ev){
+  if(ev){ ev.preventDefault(); ev.stopPropagation(); }
+  const list = pickRoot(), btn = $("pb-"+name);
+  if(PICK_FOR === name && list.classList.contains("show")) return closePick();
+  closePick();
+  PICK_FOR = name;
+  btn.classList.add("open");
+  drawPick("");
+  // The list is at least as wide as its button, but free to grow up to
+  // whatever room is left on screen — a ticket summary is worth reading.
+  const r = btn.getBoundingClientRect();
+  const room = document.documentElement.clientWidth - r.left - 14;
+  list.style.width    = "";
+  list.style.minWidth = r.width + "px";
+  list.style.maxWidth = Math.max(240, Math.min(520, room)) + "px";
+  list.style.left  = (r.left + window.scrollX) + "px";
+  list.style.top   = (r.bottom + window.scrollY + 6) + "px";
+  list.classList.add("show");
+  const box = list.querySelector(".picker-search");
+  if(box) box.focus();
+}
+
+function drawPick(filter){
+  const list = pickRoot(), sel = $(PICK_FOR);
+  const opts = Array.from(sel.options).filter(o=>o.value !== "");
+  const needle = (filter||"").toLowerCase();
+  const shown = opts.filter(o=>o.textContent.toLowerCase().includes(needle));
+
+  // A search box earns its place once the list is too long to scan.
+  const search = opts.length > 8
+    ? `<input class="picker-search" placeholder="Type to filter…" value="${filter||""}">`
+    : "";
+  const rows = shown.length
+    ? shown.map(o=>{
+        const at = o.textContent.indexOf(" — ");
+        const body = at > 0
+          ? `<span class="k">${esc(o.textContent.slice(0, at))}</span>` +
+            `<span class="s">${esc(o.textContent.slice(at + 3))}</span>`
+          : esc(o.textContent);
+        return `<div class="picker-opt${at > 0 ? " two" : ""}` +
+               `${o.value===sel.value?" sel":""}" ` +
+               `data-value="${o.value.replace(/"/g,"&quot;")}">${body}</div>`;
+      }).join("")
+    : `<div class="picker-none">Nothing matches “${esc(filter)}”.</div>`;
+  list.innerHTML = search + rows;
+
+  const box = list.querySelector(".picker-search");
+  if(box){
+    box.oninput = ()=>{ const at = box.selectionStart; drawPick(box.value);
+      const b2 = list.querySelector(".picker-search");
+      if(b2){ b2.focus(); b2.setSelectionRange(at, at); } };
+    box.onmousedown = e=>e.stopPropagation();
+  }
+  list.querySelectorAll(".picker-opt").forEach(row=>{
+    row.onclick = ()=>choosePick(row.dataset.value);
+  });
+}
+
+function choosePick(value){
+  const name = PICK_FOR, sel = $(name);
+  sel.value = value;
+  closePick();
+  syncPick(name);
+  sel.dispatchEvent(new Event("change", {bubbles:true}));   // runs the page's own handler
+}
+
+function syncPick(name){
+  const sel = $(name), btn = $("pb-"+name);
+  if(!btn) return;
+  const chosen = sel.options[sel.selectedIndex];
+  const placeholder = sel.options[0] && sel.options[0].value === ""
+    ? sel.options[0].textContent : "—";
+  const empty = !sel.value;
+  btn.classList.toggle("empty", empty);
+  // data-short="key" keeps the button down to 'ST12-5876': the summary that
+  // follows it would otherwise stretch the column and crush its neighbours.
+  let label = empty ? placeholder : (chosen ? chosen.textContent : placeholder);
+  if(!empty && sel.dataset.short === "key") label = label.split(" — ")[0];
+  btn.querySelector(".picker-label").textContent = label;
+}
+
+// Logging another round keeps everything above: you stay signed in, on the
+// same sprint, dates and attendance — only the work items and the plan reset.
+function logAnother(){
+  PLAN = []; RESULTS = []; ITEMS = {}; SEL = []; ANCHOR = null;
+  TITLES = {};                       // a fresh round names its own sub-tasks
+  // Whatever just went in is on the timesheet now: the days it covered must
+  // come back greyed out, not on offer for a second helping.
+  LOGGED_KEY = ""; DAYS_KEY = "";
+  $("resultsWrap").innerHTML = "";
+  $("planWrap").innerHTML = "";
+  $("planNotes").innerHTML = "";
+  hide("mRun"); hide("mResult"); hide("mItems");
+  $("c-result").style.display = "none";
+  $("c-result").classList.remove("done");
+  $("btnRetry").style.display = "none";
+  runBusy(false);
+  $("c-items").classList.remove("done");
+  $("c-run").classList.add("disabled");
+  wiDraw(); wiRenderList(); wiSelectionChanged(); itemsChanged();
+  loadDays();
+  $("c-items").scrollIntoView({behavior:"smooth"});
+}
+
+// Start over means start over: clear the session on the backend first, or the
+// reload would just restore it below and nothing would look reset.
+async function startOver(){
+  try{ await fetch("/api/reset", {method:"POST"}); }catch(e){}
+  location.reload();
+}
+
+// A reload used to look like a logout: the backend still had the session, the
+// page just never asked. It asks now.
+async function restoreSession(){
+  try{
+    const s = await (await fetch("/api/session")).json();
+    if(!(s.signed_in && s.user)) return;
+    // A reload starts the run afresh — everything except the sign-in goes, on
+    // the backend too, so the blank form and the server actually agree.
+    await fetch("/api/reset", {method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({keep_session:true})});
+    onLoggedIn(s.user);
+  }catch(e){ /* offline or opened as a file: sign in normally */ }
+}
+restoreSession();
+
+setMode("attendance");   // paints the mode hint once everything is defined
+attInfoText();
+wiRenderList();          // the empty "nothing assigned yet" strip
+itemsChanged();
+</script>
+</body>
+</html>
