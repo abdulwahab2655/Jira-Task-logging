@@ -268,6 +268,7 @@ click is exactly what will be created.
 | amber outline | partly logged in Jira; hovering says `4h of 10h already in Jira` |
 | a green ✓, no number | already logged in full — nothing to choose, nothing to click |
 | purple | leave or public holiday — it goes to Planned Leaves on its own |
+| rose, with a `!` | **absent** — the portal recorded no hours and no leave. Nothing is logged for it automatically and **Select unassigned** skips it; click it and type what it is worth |
 | green fill | already assigned |
 | blank / dim | not in the range, or nothing worked |
 
@@ -363,7 +364,8 @@ weekends, leave and public holidays behave identically in both.
 | Weekday, floored < 9h | floored | your ticket **+** a **Short Leave** sub-task for (8h − floored) under Planned Leaves |
 | Weekend with hours | floored, in full | your ticket |
 | Public holiday / leave | 8h | Planned Leaves |
-| Absent, or today | nothing | — |
+| Absent | nothing automatically — *what you type, if you claim the day* | your ticket |
+| Today | nothing | — |
 
 Examples:
 
@@ -371,6 +373,17 @@ Examples:
 - `10h 50m` → **9h 30m**
 - `7h 2m` → **7h** in the ticket **+ 1h Short Leave**
 - `6h` → **6h** in the ticket **+ 2h Short Leave**
+
+**Absent days are yours to decide.** When the portal marks a day absent — or
+marks it anything that is not leave on a working day — there are no hours to go
+by, and filing it as leave would be a guess. So nothing is created for it on its
+own: it shows on the calendar in rose with a `!`, **Select unassigned** passes
+over it, and the day counter names how many are still unclaimed. Click one (or a
+run of them), pick a ticket and a Task, and type the hours you want against it —
+that is the only thing the day is worth. Whatever Jira already holds for that
+date still comes off the top, so claiming an absent day cannot log the same hour
+twice. Because they have no hours of their own, absent days are assigned on
+their own rather than mixed into a selection of ordinary days.
 
 The estimate on each sub-task is whatever it holds in total.
 

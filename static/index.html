@@ -302,6 +302,19 @@
   .wi-day.off{background:transparent;color:#475569;cursor:default}
   .wi-day.leave{background:rgba(168,85,247,.13);color:#d8b4fe;cursor:default}
   .wi-day.leave .h{color:#c084fc}
+  /* Absent / unmarked: the portal recorded no hours and no leave, so there is
+     nothing to log automatically. It stays clickable - you say what it is
+     worth - but 'Select unassigned' never sweeps it up. */
+  .wi-day.absent{background:rgba(244,63,94,.10);color:#fda4af;
+                 box-shadow:inset 0 0 0 1px rgba(244,63,94,.45);cursor:pointer}
+  .wi-day.absent:hover{box-shadow:inset 0 0 0 1px rgba(244,63,94,.85)}
+  .wi-day.absent .h{color:#fb7185;font-weight:700}
+  .abs-n{color:#fb7185}
+  .wi-day.absent.has{background:rgba(34,197,94,.13);
+                     box-shadow:inset 0 0 0 1px rgba(34,197,94,.5)}
+  .wi-day.absent.has .h{color:#86efac}
+  .wi-day.absent.sel{background:var(--accent);color:#fff;box-shadow:none}
+  .wi-day.absent.sel .h{color:#dbeafe}
   /* Already on the Jira timesheet: nothing to do with it, so it reads as
      settled rather than as a day you forgot to click. */
   .wi-day.full{background:transparent;color:#6d7e95;cursor:default;box-shadow:none}
@@ -1120,6 +1133,19 @@ function monthOf(iso){
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 function workDates(){ return DAYS.filter(d => d.minutes).map(d => d.date); }
+// Absent days count as absent only when nothing is owed for them automatically.
+function isAbsent(iso){
+  const d = DAY[iso];
+  return !!d && d.category === "absent" && !d.minutes;
+}
+// Every day you are allowed to click, in date order: the days that still owe
+// hours, plus the absent days you may claim by hand. Shift-click ranges and the
+// grouping in step 5 both walk this, so a claimed absent day sits in sequence
+// with the days around it.
+function clickableDates(){
+  return DAYS.filter(d => d.minutes || (d.category === "absent" && !d.minutes))
+             .map(d => d.date);
+}
 
 // The day map is asked for once per (range, mode) — typing in a date box fires
 // a lot of events and none of them should cost a request.
@@ -1196,13 +1222,27 @@ function wiDraw(){
       cls.push("leave");
       sub = info.leaves[0].hours.replace(/\s+/g, "");
       tip = info.leaves[0].title;
+    } else if(info && info.category === "absent"){
+      // Absent, or marked something other than leave, on a working day. The
+      // portal gives no hours to go by and it must never be filed as leave, so
+      // nothing is offered for it - but you can still claim it and say what it
+      // is worth. It is deliberately left out of 'Select unassigned'.
+      cls.push("absent");
+      sub = ITEMS[iso] ? "<b>✓</b>" : "<b>!</b>";
+      tip = info.logged
+        ? "Absent - " + info.logged_hours + " already in Jira. Click to log against it."
+        : "Absent - nothing is logged automatically. Click to choose the hours.";
+      if(ITEMS[iso]) cls.push("has");
+      if(SEL.includes(iso)) cls.push("sel");
     } else cls.push("off");
     html += '<div class="' + cls.join(" ") + '" data-iso="' + iso + '" title="' +
             esc(tip) + '">' +
             d.getDate() + (sub ? '<span class="h">' + sub + "</span>" : "") + "</div>";
   }
   grid.innerHTML = html;
-  grid.querySelectorAll(".wi-day.work").forEach(c => {
+  // Absent days are clickable too: they are the one kind of day you have to
+  // claim by hand.
+  grid.querySelectorAll(".wi-day.work, .wi-day.absent").forEach(c => {
     c.onclick = e => wiDayClick(c.dataset.iso, e);
   });
   wiCount();
@@ -1219,6 +1259,11 @@ function wiCount(){
                    "need hours (" + fmtMinutes(mins) + ")"
                  : "<b>Nothing left to log</b> in this range");
   if(done) bits.push(done + " done in Jira");
+  // Absent days are not part of 'still need hours' - nothing is owed for them
+  // automatically - so they are counted out loud instead of going unmentioned.
+  const abs = DAYS.filter(d => d.category === "absent" && !d.minutes);
+  const unclaimed = abs.filter(d => !ITEMS[d.date]).length;
+  if(unclaimed) bits.push('<b class="abs-n">' + unclaimed + " absent</b> — click to log");
   $("wiCount").innerHTML = bits.join(" · ");
 }
 
@@ -1232,7 +1277,7 @@ function wiMonthStep(n){
 }
 
 function wiDayClick(iso, ev){
-  const days = workDates();
+  const days = clickableDates();
   if(ev && ev.shiftKey && ANCHOR){
     const a = days.indexOf(ANCHOR), b = days.indexOf(iso);
     if(a >= 0 && b >= 0) SEL = days.slice(Math.min(a,b), Math.max(a,b) + 1);
@@ -1248,6 +1293,8 @@ function wiDayClick(iso, ev){
 }
 
 function wiSelectRest(){
+  // Days that owe hours only. An absent day is never swept up here: there is
+  // no telling what it is worth, so it is yours to claim deliberately.
   SEL = DAYS.filter(d => d.minutes && !ITEMS[d.date]).map(d => d.date);
   ANCHOR = SEL[0] || null;
   if(SEL.length) WI_MONTH = monthOf(SEL[0]);
@@ -1283,7 +1330,18 @@ function selTotal(){
   const first = DAY[SEL[0]] ? DAY[SEL[0]].minutes : 0;
   return SEL.every(iso => DAY[iso] && DAY[iso].minutes === first) ? first : null;
 }
-function splitIsHours(){ return SPLIT_BY === "hrs" && ROWS.length > 1 && !!selTotal(); }
+// A selection of absent days only. They carry no hours of their own, so the
+// hours are always typed rather than shared out of a day - even for one row.
+function absentSel(){ return SEL.length > 0 && SEL.every(isAbsent); }
+// Absent and ordinary days divide differently - typed hours against a share of
+// the day - so they cannot sensibly be assigned in the same breath.
+function mixedSel(){
+  return SEL.some(isAbsent) && SEL.some(iso => !isAbsent(iso));
+}
+function splitIsHours(){
+  if(absentSel()) return true;
+  return SPLIT_BY === "hrs" && ROWS.length > 1 && !!selTotal();
+}
 
 function wiSelectionChanged(){
   const n = SEL.length;
@@ -1293,7 +1351,12 @@ function wiSelectionChanged(){
     : n + " days selected";
   $("wiSelHint").textContent = n === 0
     ? "Pick a day on the calendar. Shift-click for a run of days, Ctrl-click to add one."
-    : (n === 1 ? (DAY[SEL[0]].hours || "nothing") + " to log" +
+    : (mixedSel()
+        ? "Absent days go in on their own - pick those separately"
+        : absentSel()
+          ? (n === 1 ? "Absent - type the hours you want logged against it"
+                     : n + " absent days - the hours you type go against each")
+        : n === 1 ? (DAY[SEL[0]].hours || "nothing") + " to log" +
                  (DAY[SEL[0]].logged
                    ? " (" + DAY[SEL[0]].logged_hours + " of " +
                      DAY[SEL[0]].target_hours + " already in Jira)" : "")
@@ -1357,8 +1420,11 @@ function wiRenderRows(){
     $("wiErr").className = "wi-err";
     return;
   }
-  const multi = ROWS.length > 1;
-  if(!multi) SPLIT_BY = "pct";              // one row owns the whole day anyway
+  const absent = absentSel();
+  // An absent day still needs its hours typed with a single row, so the split
+  // strip stays on show for it.
+  const multi = ROWS.length > 1 || absent;
+  if(ROWS.length <= 1 && !absent) SPLIT_BY = "pct";   // one row owns the day anyway
   const hours = splitIsHours(), dayMins = selTotal() || 0;
   $("wiRows").innerHTML = ROWS.map((r, i) => `
     <div class="wi-row${i ? " extra" : ""}">
@@ -1383,13 +1449,15 @@ function wiRenderRows(){
       <div class="wi-sum" id="rm-${r.id}"></div>
       <div class="wi-split"${multi ? "" : ' style="display:none"'}>
         ${hours
-          ? `<input class="wi-hrs" id="rh-${r.id}" value="${fmtMinutes(r.mins || 0)}"
+          ? `<input class="wi-hrs" id="rh-${r.id}" value="${
+                      r.mins ? fmtMinutes(r.mins) : ""}"
                     placeholder="4h 30m" oninput="wiHours(${r.id}, this.value)">
-             <span class="wi-of">of ${fmtMinutes(dayMins)}</span>`
+             <span class="wi-of">${absent ? "for this day" : "of " + fmtMinutes(dayMins)}</span>`
           : `<input type="range" min="0" max="100" step="5" value="${r.share}"
                     id="rs-${r.id}" oninput="wiShare(${r.id}, this.value)">`}
         <span class="wi-pct" id="rp-${r.id}">${
-          hours ? Math.round((r.mins || 0) / dayMins * 100) : r.share}%</span>
+          absent ? "" : hours ? Math.round((r.mins || 0) / dayMins * 100) + "%"
+                              : r.share + "%"}</span>
       </div>
       <div class="wi-name" id="rq-${r.id}"></div>
     </div>`).join("");
@@ -1563,10 +1631,14 @@ function wiNameLines(){
 }
 
 function wiUpdateSplit(){
-  const multi = ROWS.length > 1, hours = splitIsHours(), day = selTotal() || 0;
+  const absent = absentSel();
+  const multi = ROWS.length > 1 || absent;
+  const hours = splitIsHours(), day = selTotal() || 0;
 
   $("wiTools").style.display = multi ? "flex" : "none";
-  $("wiSeg").style.display = multi ? "inline-flex" : "none";
+  // Nothing to choose between for an absent day: there is no day total to take
+  // a percentage of, so the hours are simply typed.
+  $("wiSeg").style.display = (multi && !absent) ? "inline-flex" : "none";
   Array.from($("wiSeg").children).forEach(b =>
     b.classList.toggle("on", b.dataset.m === SPLIT_BY));
 
@@ -1574,8 +1646,8 @@ function wiUpdateSplit(){
   const shares = ROWS.map(r =>
     hours ? (day ? (r.mins || 0) / day * 100 : 0) : r.share);
   const bar = $("wiBar");
-  bar.style.display = multi ? "flex" : "none";
-  if(multi) bar.innerHTML = shares.map((pct, i) =>
+  bar.style.display = (multi && !absent) ? "flex" : "none";
+  if(multi && !absent) bar.innerHTML = shares.map((pct, i) =>
     '<span style="width:' + Math.max(0, Math.min(100, pct)) + "%;background:" +
     SPLIT_COLORS[i % SPLIT_COLORS.length] + '"></span>').join("");
   ROWS.forEach((r, i) => {
@@ -1586,7 +1658,17 @@ function wiUpdateSplit(){
   // The only thing worth an error is a division that doesn't add up. A row not
   // filled in yet just keeps the button off — no scolding.
   let problem = "";
-  if(hours){
+  if(mixedSel()){
+    problem = "Absent days are assigned on their own - they carry no hours of " +
+              "their own, so you type what they are worth.";
+  } else if(absent){
+    // No day to add up to, so the only thing that can be wrong is asking for
+    // nothing at all.
+    const sum = ROWS.reduce((t, r) => t + (r.mins || 0), 0);
+    if(sum <= 0)
+      problem = "Type the hours to log against " +
+                (SEL.length === 1 ? "this absent day." : "each absent day.");
+  } else if(hours){
     const sum = ROWS.reduce((t, r) => t + (r.mins || 0), 0);
     if(sum > day)
       problem = "That is " + fmtMinutes(sum - day) + " more than the day's " +
@@ -1610,13 +1692,19 @@ function wiUpdateSplit(){
 
 function wiCommit(){
   hide("mItems");
+  const absent = absentSel();
   const multi = ROWS.length > 1, hours = splitIsHours(), day = selTotal() || 0;
   const rows = ROWS.map(r => {
     // The title travels with the day. Days that group into one sub-task can
     // carry different ones, and the preview then offers them as its name.
     const row = {parent:r.parent, task_value:r.task,
                  title:(r.title || "").trim()};
-    if(hours){
+    if(absent){
+      // An absent day has no total to take a share of, so the hours stand on
+      // their own and the backend logs exactly them.
+      row.hours = fmtMinutes(r.mins || 0);
+      row.share = 100;
+    } else if(hours){
       // The weight is the exact fraction of the day, so the backend's own split
       // reproduces the hours typed here to the minute.
       row.share = (r.mins || 0) / day * 100;
@@ -1626,7 +1714,8 @@ function wiCommit(){
   });
   let n = 0;
   SEL.forEach(iso => {
-    if(DAY[iso] && DAY[iso].minutes){
+    // A day owing hours, or an absent day you chose to claim.
+    if(DAY[iso] && (DAY[iso].minutes || isAbsent(iso))){
       ITEMS[iso] = rows.map(r => Object.assign({}, r));
       n++;
     }
@@ -1640,7 +1729,7 @@ function wiCommit(){
 // Consecutive working days carrying the same ticket(s) collapse into one line,
 // so assigning a whole sprint reads as one row rather than twenty.
 function wiGroups(){
-  const groups = [], days = workDates();
+  const groups = [], days = clickableDates();
   Object.keys(ITEMS).sort().forEach(iso => {
     const sig = sigOf(ITEMS[iso]), last = groups[groups.length - 1];
     const prev = last && last.dates[last.dates.length - 1];
