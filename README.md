@@ -1,13 +1,37 @@
-# Jira Timesheet
+<div align="center">
 
-Fills in a release worth of Jira time in one pass: it reads your attendance,
-reads what your Jira timesheet already has, works out what each day is still
-owed, groups those days into sub-tasks, logs a work log per day, and walks each
-sub-task to **Done**.
+# 🗓️ Jira Timesheet
 
-There are two ways in — a local web page (the usual one) and a command line
-tool. Both run on your machine and talk only to your Jira and your attendance
-portal.
+**Fill in a whole release worth of Jira time in one pass.**
+
+It reads your attendance, reads what your Jira timesheet already has, works out
+what each day is still owed, groups those days into sub-tasks, logs a work log
+per day, and walks each sub-task to **Done**.
+
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Flask](https://img.shields.io/badge/Flask-web%20UI-000000?logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
+[![Selenium](https://img.shields.io/badge/Selenium-headless%20SSO-43B02A?logo=selenium&logoColor=white)](https://www.selenium.dev/)
+[![Jira](https://img.shields.io/badge/Jira-Server%20%2F%20DC-0052CC?logo=jira&logoColor=white)](https://www.atlassian.com/software/jira)
+[![Runs locally](https://img.shields.io/badge/Runs-100%25%20locally-success)](#)
+
+</div>
+
+---
+
+## ✨ Why
+
+Logging a release by hand is twenty-odd sub-tasks, a work log per day, and a
+walk to **Done** on each one. This does the whole thing in two clicks — and
+never logs the same hour twice.
+
+| | |
+| --- | --- |
+| 🔍 **Reads your attendance** | straight from the portal's API — no copy-paste, no spreadsheet |
+| 🧮 **Works out what each day is worth** | floors the hours, credits half hours, adds **Short Leave** for a light day |
+| 🧾 **Subtracts what Jira already has** | a half-finished range picks up exactly the days that are missing or short |
+| 📦 **Packs days into sub-tasks** | a release becomes a handful of sub-tasks, not twenty — one work log per day, always |
+| 🚀 **Runs them in parallel** | overlapping the waiting turns a 5.1s run into 2.1s |
+| 🔐 **Keeps your sign-in safe** | Windows Credential Manager, never a plaintext file |
 
 ```
                  attendance portal ──┐
@@ -16,11 +40,55 @@ your Jira worklogs ──────────────────┘    
                  you: which ticket, which Task, a title ──────────┘
 ```
 
+There are two ways in — a local web page (the usual one) and a command line
+tool. Both run on your machine and talk only to your Jira and your attendance
+portal.
+
 ---
 
-# 1. Configure it
+## ⚡ Quick start
 
-## 1.1 What you need
+```powershell
+pip install requests openpyxl flask selenium keyring browser_cookie3 tzdata
+python app.py
+```
+
+Then open **<http://127.0.0.1:5000>**, and do the first run small — narrow the
+dates to two or three days and press **Preview plan** before anything is
+written. Full walk-through in [§1.6 First run](#16-first-run).
+
+Prefer a terminal? `python jira_logging_utility.py --dry-run` previews the same
+plan and creates nothing.
+
+---
+
+## 📖 Contents
+
+| | Section | What's in it |
+| --- | --- | --- |
+| **1** | [Configure it](#1-configure-it) | requirements, install, servers, where your sign-in is kept, tunables, first run |
+| **2** | [The web UI, step by step](#2-the-web-ui-step-by-step) | sign in → sprint → dates → work items → review → results |
+| **3** | [What a day is worth](#3-what-a-day-is-worth) | the hour rules, both modes, worked examples |
+| **4** | [What Jira already has](#4-what-jira-already-has) | the timesheet read-back, and why hours can't go in twice |
+| **5** | [How sub-tasks are built](#5-how-sub-tasks-are-built) | grouping, packing, naming, and why a run is quick |
+| **6** | [The command line](#6-the-command-line) | every flag, and a fully non-interactive run |
+| **7** | [How it is put together](#7-how-it-is-put-together) | the files, the shared rules, the API endpoints |
+| **8** | [When something goes wrong](#8-when-something-goes-wrong) | every error message, and what to do about it |
+
+> [!TIP]
+> New here? Read [§1.6 First run](#16-first-run), then
+> [§3 What a day is worth](#3-what-a-day-is-worth) — between them they cover
+> everything the tool will actually do to your Jira.
+
+> [!IMPORTANT]
+> Nothing leaves your machine. Every call goes to your own Jira and your own
+> attendance portal, and your password lives in Windows Credential Manager.
+
+---
+
+## 1. Configure it
+
+### 1.1 What you need
 
 | | |
 | --- | --- |
@@ -28,7 +96,7 @@ your Jira worklogs ──────────────────┘    
 | **Microsoft Edge or Chrome** | only for the automatic sign-in and the attendance fetch |
 | **Network** | reachable Jira (VPN if your Jira needs one) |
 
-## 1.2 Install
+### 1.2 Install
 
 Everything, web UI included:
 
@@ -54,7 +122,7 @@ What each package is for, so you can leave out what you don't want:
 | `browser_cookie3` | borrowing a Jira session from a browser you are already signed in to | one less sign-in shortcut |
 | `tzdata` | resolving `Asia/Karachi` and friends on Windows | falls back to this machine's timezone, which is normally the same answer |
 
-## 1.3 Point it at your servers
+### 1.3 Point it at your servers
 
 Defaults live at the top of each module — change them there, or pass a flag.
 
@@ -66,7 +134,7 @@ Defaults live at the top of each module — change them there, or pass a flag.
 | Jiras with no Microsoft SSO | `sso_login.py` › `PASSWORD_ONLY_HOSTS` | `("tracking.i2cinc.com",)` |
 | Web UI port | `app.py` › `app.run(... port=5000)` | `5000` |
 
-## 1.4 Where your sign-in is kept
+### 1.4 Where your sign-in is kept
 
 - **Windows Credential Manager**, under the service name `jira-timesheet`, one
   entry per Jira host. This is where your password or PAT goes when you tick
@@ -79,7 +147,7 @@ Defaults live at the top of each module — change them there, or pass a flag.
   fetch run with nothing on screen. It is gitignored, it can grow to a few
   hundred MB, and deleting it simply means signing in once more.
 
-## 1.5 Behaviour you can tune
+### 1.5 Behaviour you can tune
 
 | Knob | Where | Default | Means |
 | --- | --- | --- | --- |
@@ -95,7 +163,7 @@ Defaults live at the top of each module — change them there, or pass a flag.
 `POOL_SIZE` at least that big. Turn them down if your Jira starts answering
 with 429s.
 
-## 1.6 First run
+### 1.6 First run
 
 ```powershell
 python app.py          # then open http://127.0.0.1:5000
@@ -120,9 +188,9 @@ python jira_logging_utility.py --dry-run
 
 ---
 
-# 2. The web UI, step by step
+## 2. The web UI, step by step
 
-## Step 1 — Sign in
+### Step 1 — Sign in
 
 Two routes to the same place:
 
@@ -140,7 +208,7 @@ Atlassian form — so there the button is really "use my saved password".
 
 A page reload keeps you signed in; **Start over** clears the session.
 
-## Step 2 — Sprint & issue
+### Step 2 — Sprint & issue
 
 Enter the **ST** (`ST19`, `ST-19` or `19`) and the **release** (`26.8` or
 `26.08`, treated as the same). The match is made on the team number and the
@@ -157,7 +225,7 @@ the issue whose summary contains "Planned Leaves", and the Task metadata for
 those tickets' project starts loading in the background — which is why the Task
 dropdown in step 4 opens instantly rather than after a wait.
 
-## Step 3 — Dates & attendance
+### Step 3 — Dates & attendance
 
 **The attendance sheet fetches itself.** The portal is a single-page app over a
 REST API, so `attendance_portal.py` talks to that API rather than reading the
@@ -189,7 +257,7 @@ logs. See section 3.
 
 **Already on your Jira timesheet** — see section 4.
 
-## Step 4 — Work items
+### Step 4 — Work items
 
 A calendar of the range, drawn from the attendance itself, so what you can
 click is exactly what will be created.
@@ -237,7 +305,7 @@ percentages, and says so.
 Days you never assign are simply skipped, and the counter says so
 (`14 of 19 work days`) rather than letting you find out afterwards.
 
-## Step 5 — Review & run
+### Step 5 — Review & run
 
 One line per sub-task, grouped into a panel per **ticket + Task**:
 
@@ -268,7 +336,7 @@ read at a glance, with the days as chips — and a long list folds away:
 >
 > ok **18 days already on your Jira timesheet** — left untouched · *show the days*
 
-## Step 6 — Results
+### Step 6 — Results
 
 The same cards, now carrying `done` or `failed`, the new Jira key, and how far
 each got — a half-written one says so (*"failed · ST12-7003 · 1 of 3 logged"*)
@@ -281,7 +349,7 @@ and clears just the work items.
 
 ---
 
-# 3. What a day is worth
+## 3. What a day is worth
 
 Total Hours are floored to the whole hour, with a half hour credited when the
 minutes are **50 or more** (`9h 45m` → `9h`, `9h 58m` → `9h 30m`).
@@ -308,7 +376,7 @@ The estimate on each sub-task is whatever it holds in total.
 
 ---
 
-# 4. What Jira already has
+## 4. What Jira already has
 
 Before anything is planned, your own worklogs for the range are read back
 (`worklogAuthor = currentUser()`), and every day is trimmed by what it already
@@ -352,7 +420,7 @@ glance at the Worklog Tracker in that case.
 
 ---
 
-# 5. How sub-tasks are built
+## 5. How sub-tasks are built
 
 Days are grouped by **ticket + Task** and packed into sub-tasks of up to
 **24h**, so a release becomes a handful of sub-tasks instead of twenty-odd:
@@ -378,7 +446,7 @@ Planned Leaves            leave and holidays, one sub-task each — never packed
 - **Splitting a day across tickets happens first**, so a day shared 60/40 gives
   its 60% to one ticket's group and its 40% to the other's.
 
-## Naming
+### Naming
 
 A sub-task is named for its **Task** plus the **title**, and nothing else:
 
@@ -401,7 +469,7 @@ plan, and the work log comment follows the title you settled on.
 Leave sub-tasks can be named too (`Casual Leave-Eid holiday`) — the Task field
 still carries the leave type, only the name changes.
 
-## What each sub-task gets
+### What each sub-task gets
 
 - **Assignee**: you
 - **Task** field: the Task you picked (the leave type on leave days)
@@ -410,7 +478,7 @@ still carries the leave type, only the name changes.
 - **Status**: walked **To Do → In Progress → Done**, ticking the checklist that
   matches the Task (Development → Development Checklist)
 
-## Why a run is quick
+### Why a run is quick
 
 Almost all of a run is waiting for Jira, so the waiting is overlapped:
 
@@ -431,7 +499,7 @@ with 20 fewer calls. The sprint lookup: **1.8s → 0.3s**.
 
 ---
 
-# 6. The command line
+## 6. The command line
 
 ```powershell
 python jira_logging_utility.py --dry-run     # preview, create nothing
@@ -483,7 +551,7 @@ python jira_logging_utility.py --attendance-file attendance.xlsx `
 
 ---
 
-# 7. How it is put together
+## 7. How it is put together
 
 | File | Does |
 | --- | --- |
@@ -506,7 +574,7 @@ The backend endpoints, if you want to script against it: `/api/login`,
 
 ---
 
-# 8. When something goes wrong
+## 8. When something goes wrong
 
 - **"Wrong username or password (HTTP 401)"** — the credentials are wrong, or
   password login is disabled (common on Jira Server). Create a **Personal
@@ -538,5 +606,3 @@ The backend endpoints, if you want to script against it: `/api/login`,
 - **A leave day is not picked up as leave** — the portal labels it differently;
   note the exact text so it can be added.
 - **`openpyxl` warns about a default style** — harmless.
-#   J i r a - T a s k - l o g g i n g  
- 
