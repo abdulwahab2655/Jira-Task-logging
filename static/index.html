@@ -23,7 +23,12 @@
   .card h2{margin:0 0 14px;font-size:15px;display:flex;align-items:center;gap:9px}
   /* Sits at the far end of the step-1 heading, so it is reachable at any point
      without competing with anything in the card body. */
-  .signout{margin-left:auto;padding:5px 12px;font-size:12px}
+  .signout{margin-left:auto;padding:5px 11px;font-size:12px;display:inline-flex;
+    align-items:center;gap:6px;color:#fca5a5;border-color:rgba(248,113,113,.35)}
+  .signout:hover{background:rgba(248,113,113,.12);border-color:rgba(248,113,113,.6);
+    color:#fecaca}
+  .signout svg{flex:0 0 auto}
+  .signout.busy{opacity:.6;pointer-events:none}
   .step{width:22px;height:22px;border-radius:50%;background:var(--panel2);
     border:1px solid var(--line);display:inline-flex;align-items:center;
     justify-content:center;font-size:12px;color:var(--muted)}
@@ -283,22 +288,25 @@
   .tips b{color:var(--text);font-weight:600;margin-right:5px}
   /* A day cell has to hold '9h19m' under a date without spilling, so the
      calendar column is sized from the cell up: 7 x 44px + gaps + padding. */
-  .wi{display:grid;grid-template-columns:minmax(0,356px) minmax(0,1fr);gap:16px;
+  /* The calendar is a fixed, compact column: it only ever holds seven columns
+     of two-character days, so the space it used to take went to the editor,
+     which actually has fields to lay out. */
+  .wi{display:grid;grid-template-columns:minmax(0,296px) minmax(0,1fr);gap:16px;
     align-items:start;margin-top:12px}
   @media (max-width:880px){ .wi{grid-template-columns:1fr} }
   .wi-panel{background:var(--panel2);border:1px solid var(--line);border-radius:12px;
-    padding:14px 15px;min-width:0}
-  .wi-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
-  .wi-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
-  .wi-dow{font-size:10px;font-weight:700;color:var(--muted);text-align:center;padding:3px 0;
+    padding:12px 12px;min-width:0}
+  .wi-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
+  .wi-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
+  .wi-dow{font-size:9px;font-weight:700;color:var(--muted);text-align:center;padding:2px 0;
     text-transform:uppercase}
-  .wi-day{height:47px;border-radius:10px;display:flex;flex-direction:column;align-items:center;
-    justify-content:center;font-size:13.5px;line-height:1.05;background:var(--panel);
+  .wi-day{height:38px;border-radius:8px;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;font-size:12px;line-height:1.05;background:var(--panel);
     border:1px solid transparent;cursor:pointer;user-select:none;transition:.12s;
-    padding:3px 1px;overflow:hidden;min-width:0}
+    padding:2px 1px;overflow:hidden;min-width:0;position:relative}
   /* Tabular figures keep '8h4m' and '11h11m' the same width, and the label is
      clipped rather than allowed to widen the cell. */
-  .wi-day .h{font-size:8.5px;font-weight:700;color:var(--muted);margin-top:3px;
+  .wi-day .h{font-size:8px;font-weight:700;color:var(--muted);margin-top:1px;
     letter-spacing:-.1px;white-space:nowrap;font-variant-numeric:tabular-nums;
     max-width:100%;overflow:hidden}
   .wi-day.blank{visibility:hidden}
@@ -313,6 +321,7 @@
   .wi-day.absent:hover{box-shadow:inset 0 0 0 1px rgba(244,63,94,.85)}
   .wi-day.absent .h{color:#fb7185;font-weight:700}
   .abs-n{color:#fb7185}
+  .part-n{color:#fcd34d}
   .wi-day.absent.has{background:rgba(34,197,94,.13);
                      box-shadow:inset 0 0 0 1px rgba(34,197,94,.5)}
   .wi-day.absent.has .h{color:#86efac}
@@ -334,11 +343,21 @@
   .wi-day.work:hover{border-color:var(--accent)}
   .wi-day.has{background:rgba(34,197,94,.13);box-shadow:inset 0 0 0 1px rgba(34,197,94,.5)}
   .wi-day.has .h{color:#86efac}
-  /* Part of the day is spoken for and part is still free: green enough to read
-     as "started", outlined enough to read as "still clickable". */
-  .wi-day.part-assigned{background:rgba(34,197,94,.07);
-    box-shadow:inset 0 0 0 1px rgba(34,197,94,.45)}
-  .wi-day.part-assigned .h{color:#86efac}
+  /* Part of the day is spoken for and part is still free. Deliberately NOT
+     green: green is "settled", and a day still owing hours must not read as
+     finished. Amber is the same colour the calendar already uses for a day
+     that is short, which is exactly what this is. */
+  .wi-day.part-assigned{background:rgba(245,158,11,.10);
+    box-shadow:inset 0 0 0 1px rgba(245,158,11,.65)}
+  .wi-day.part-assigned .h{color:#fcd34d}
+  /* A day that is short in Jira and a day you have half-assigned are both
+     amber; only this dot says which of them you did. */
+  .wi-day.part-assigned::after,.wi-day.has::after{content:"";position:absolute;
+    top:3px;right:3px;width:4px;height:4px;border-radius:50%;background:#fbbf24}
+  .wi-day.has::after{background:#4ade80}
+  .wi-day.sel::after{background:#fff}
+  .wi-day.part-assigned.sel{background:var(--accent);box-shadow:none}
+  .wi-day.part-assigned.sel .h{color:#dbeafe}
   .wi-day.sel{background:var(--accent);color:#fff;font-weight:700;box-shadow:none}
   .wi-day.sel .h{color:#dbeafe}
   .wi-count{font-size:11.5px;color:var(--muted);margin-top:11px}
@@ -358,8 +377,12 @@
   .wi-ed-head .strip-title{font-size:14px}
   /* Ticket and Task share the first line; the title, which wants the room,
      gets the second. */
-  .wi-cells{display:grid;gap:10px;align-items:end;
-    grid-template-columns:minmax(0,1fr) minmax(0,1fr) 96px 40px}
+  .wi-cells{display:grid;gap:9px;align-items:end;
+    grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) 84px 32px}
+  /* The pickers carry real text ("Select a ticket", a Task name); the hours
+     box carries four characters. Tightening the padding in here keeps the
+     labels readable instead of ellipsised down to "Sel...". */
+  .wi-cells .picker-btn{padding:9px 10px;font-size:13px;gap:6px}
   .wi-cells > .wi-title{grid-column:1 / -1}
   @media (max-width:760px){
     .wi-cells{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 40px}
@@ -371,7 +394,9 @@
   }
   /* Optional per-row hours. Blank means "the share of the day", which is what
      it has always meant; a number means exactly that much and no more. */
-  .wi-cells .wi-rowhrs{width:100%;text-align:center;font-weight:600}
+  .wi-cells .wi-rowhrs{width:100%;text-align:center;font-weight:600;
+    padding:9px 6px;font-size:13px}
+  .wi-cells .wi-rowhrs::placeholder{font-weight:500;color:#5b6b82}
   .wi-cells .wi-rowhrs.bad{border-color:rgba(239,68,68,.55);
     box-shadow:0 0 0 3px rgba(239,68,68,.12)}
   .wi-cells label{margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -384,7 +409,7 @@
     border-radius:10px;background:var(--panel)}
   .wi-empty-t{font-size:13.5px;font-weight:600;margin-bottom:4px}
   .wi-empty-d{font-size:12px;color:var(--muted);line-height:1.5}
-  .wi-x{background:none;border:1px solid var(--line);color:var(--muted);border-radius:9px;
+  .wi-x{background:none;border:1px solid var(--line);color:var(--muted);border-radius:8px;
     padding:10px 11px;margin:0;font-size:12px;font-weight:700;line-height:1}
   .wi-x:hover{background:rgba(239,68,68,.14);border-color:rgba(239,68,68,.45);color:#fca5a5}
   .wi-split{display:flex;align-items:center;gap:11px;margin-top:10px}
@@ -430,8 +455,12 @@
   <!-- STEP 1: LOGIN -->
   <div class="card" id="c-login">
     <h2><span class="step">1</span> Sign in <span class="pill" id="who"></span>
-      <button type="button" id="btnSignOut" class="ghost signout"
-              style="display:none" onclick="signOut()">Sign out</button></h2>
+      <button type="button" id="btnSignOut" class="ghost signout" style="display:none"
+              title="End this session and return to the sign-in form" onclick="signOut()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"
+             ><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path
+             d="M21 12H9"/></svg>Sign out</button></h2>
     <div id="loginForm">
       <label>Jira URL<span class="req" title="Required">*</span></label>
       <input id="baseUrl" value="https://tracking.i2cinc.com/">
@@ -587,11 +616,18 @@
         <div class="wi-grid" id="wiGrid"></div>
         <div class="wi-count" id="wiCount"></div>
         <div class="wi-legend">
-          <span><i style="background:var(--panel);box-shadow:inset 0 0 0 1px #3a4b63"></i>needs hours</span>
-          <span><i style="background:transparent;box-shadow:inset 0 0 0 1px rgba(245,158,11,.7)"></i>short</span>
-          <span><i style="background:rgba(34,197,94,.55)"></i>assigned</span>
-          <span><i style="background:rgba(168,85,247,.5)"></i>leave</span>
-          <span><i style="background:transparent;box-shadow:inset 0 0 0 1px rgba(148,163,184,.35)"></i>done</span>
+          <span title="Nothing on it yet - the number is the hours it still owes"><i
+            style="background:var(--panel);box-shadow:inset 0 0 0 1px #3a4b63"></i>needs hours</span>
+          <span title="Some of it is assigned, the rest is still free - click it again for the remainder"><i
+            style="background:rgba(245,158,11,.35);box-shadow:inset 0 0 0 1px rgba(245,158,11,.75)"></i>hours left</span>
+          <span title="Every hour of the day is spoken for"><i
+            style="background:rgba(34,197,94,.55)"></i>assigned</span>
+          <span title="Leave or public holiday - goes to Planned Leaves on its own"><i
+            style="background:rgba(168,85,247,.5)"></i>leave</span>
+          <span title="Absent - nothing is logged automatically, click to choose the hours"><i
+            style="background:rgba(244,63,94,.3);box-shadow:inset 0 0 0 1px rgba(244,63,94,.7)"></i>absent</span>
+          <span title="Already logged in Jira in full"><i
+            style="background:transparent;box-shadow:inset 0 0 0 1px rgba(148,163,184,.35)"></i>done</span>
         </div>
         <div class="strip-actions" style="margin-top:12px">
           <button class="ghost" type="button" onclick="wiSelectRest()">Select unassigned</button>
@@ -1334,15 +1370,24 @@ function wiCount(){
   const done = DAYS.filter(d => d.full).length;
   const mins = DAYS.reduce((n, d) => n + (d.minutes ? remainingMins(d.date) : 0), 0);
   const bits = [];
-  bits.push(need ? "<b>" + need + (need === 1 ? " day" : " days") + "</b> still " +
-                   "need hours (" + fmtMinutes(mins) + ")"
+  bits.push(need ? "<b>" + need + (need === 1 ? " day" : " days") + "</b> need hours (" +
+                   fmtMinutes(mins) + ")"
                  : "<b>Nothing left to log</b> in this range");
   if(done) bits.push(done + " done in Jira");
   // Absent days are not part of 'still need hours' - nothing is owed for them
   // automatically - so they are counted out loud instead of going unmentioned.
+  // Days you have started but not finished are called out on their own: they
+  // look assigned, and the point of the line is that they are not done.
+  const partial = DAYS.filter(d => d.minutes && assignedMins(d.date) &&
+                                   remainingMins(d.date) > 0);
+  if(partial.length){
+    const owed = partial.reduce((t, d) => t + remainingMins(d.date), 0);
+    bits.push('<b class="part-n">' + partial.length + " part-filled</b> (" +
+              fmtMinutes(owed) + " left)");
+  }
   const abs = DAYS.filter(d => d.category === "absent" && !d.minutes);
   const unclaimed = abs.filter(d => !ITEMS[d.date]).length;
-  if(unclaimed) bits.push('<b class="abs-n">' + unclaimed + " absent</b> — click to log");
+  if(unclaimed) bits.push('<b class="abs-n">' + unclaimed + " absent</b>");
   $("wiCount").innerHTML = bits.join(" · ");
 }
 
@@ -1568,7 +1613,7 @@ function wiRenderRows(){
           <div class="picker"><select id="rt-${r.id}" onchange="wiRowChanged(${r.id},'task')"></select>
             <button type="button" class="picker-btn empty" id="pb-rt-${r.id}"
               onclick="openPick('rt-${r.id}',event)"><span class="picker-label">—</span>${CHEV}</button></div></div>
-        <div class="wi-hrs-cell"><label>Hours <span class="muted">(optional)</span></label>
+        <div class="wi-hrs-cell"><label title="Optional">Hours</label>
           <input class="wi-rowhrs" id="rx-${r.id}" value="${esc(r.hrs || "")}"
                  placeholder="${esc(rowHint(r, dayMins))}" autocomplete="off"
                  title="Leave blank to use the whole share of the day. Type e.g. 5h or 2h 30m to log just that much and leave the rest of the day free."
@@ -1983,6 +2028,10 @@ function resetBelow(step){
 
 function itemsChanged(){
   const any = Object.keys(ITEMS).length > 0;
+  // "1 day added to the plan" is about a plan that no longer has anything in
+  // it, so it goes with the last item rather than sitting there contradicting
+  // the empty strip above it. wiCommit shows its own message after this runs.
+  if(!any) hide("mItems");
   $("c-items").classList.toggle("done", any);
   $("btnPreview").disabled = !any;
   PLAN = [];
@@ -2588,23 +2637,56 @@ function logAnother(){
 // reload would just restore it below and nothing would look reset.
 // Signing out is Start over plus the session: the backend drops the client, so
 // the reloaded page comes back to the sign-in form rather than restoring it.
+// Signing out has to actually end the session, not just blank the form: the
+// reset is sent with a real JSON body (a bodyless POST used to be rejected, so
+// the backend kept the session and the reload signed straight back in), and the
+// page only reloads once the backend has confirmed the session is gone.
 async function signOut(){
-  if(!confirm("Sign out? Anything not yet created will be lost.")) return;
-  try{ await fetch("/api/reset", {method:"POST"}); }catch(e){}
-  location.reload();
+  const btn = $("btnSignOut");
+  if(btn.classList.contains("busy")) return;
+  if(!confirm("Sign out? Anything not yet created in Jira will be lost, "
+              + "and you will need to sign in again.")) return;
+  btn.classList.add("busy");
+  try{
+    const r = await post("/api/reset", {keep_session:false});
+    if(r && r.signed_in){
+      btn.classList.remove("busy");
+      show("mLogin","err","Could not sign out — the session is still open. Try again.");
+      return;
+    }
+  }catch(e){
+    btn.classList.remove("busy");
+    show("mLogin","err","Could not reach the app to sign out. Check it is still running.");
+    return;
+  }
+  // ?signedout=1 survives the reload, so the fresh page can say what happened.
+  location.replace(location.pathname + "?signedout=1");
 }
 
 async function startOver(){
-  try{ await fetch("/api/reset", {method:"POST"}); }catch(e){}
+  // Same bodyless-POST trap as sign out: send real JSON or the reset is refused.
+  try{ await post("/api/reset", {keep_session:false}); }catch(e){}
   location.reload();
 }
 
 // A reload used to look like a logout: the backend still had the session, the
 // page just never asked. It asks now.
 async function restoreSession(){
+  // Just signed out: say so on the sign-in form rather than leaving a blank
+  // page that looks like nothing happened.
+  if(/[?&]signedout=1/.test(location.search)){
+    history.replaceState(null, "", location.pathname);
+    show("mLogin", "ok", "Signed out. Sign in again to start a new run.");
+  }
   try{
     const s = await (await fetch("/api/session")).json();
-    if(!(s.signed_in && s.user)) return;
+    if(!(s.signed_in && s.user)){
+      // Not signed in: make sure nothing from a previous session is still on
+      // show, whatever state the markup was left in.
+      $("btnSignOut").style.display = "none";
+      $("who").textContent = "";
+      return;
+    }
     // A reload starts the run afresh — everything except the sign-in goes, on
     // the backend too, so the blank form and the server actually agree.
     await fetch("/api/reset", {method:"POST",

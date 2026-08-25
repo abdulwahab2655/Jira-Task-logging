@@ -169,6 +169,17 @@ def api_session():
                    logged_days=len(STATE["logged"]))
 
 
+def _body() -> dict:
+    """
+    The JSON a request carried, or {} when it carried none.
+
+    `request.json` *raises* on a POST with no JSON content type - which is
+    exactly what a bodyless `fetch(url, {method:"POST"})` sends. Reading it
+    directly meant Sign out's reset never ran and the session survived it.
+    """
+    return request.get_json(silent=True) or {}
+
+
 @app.post("/api/reset")
 def api_reset():
     """
@@ -181,7 +192,7 @@ def api_reset():
     Either way the saved password stays put, and so does the attendance
     portal's token: that is a cache, not something the user entered.
     """
-    keep = bool((request.json or {}).get("keep_session"))
+    keep = bool(_body().get("keep_session"))
     STATE.update(sprint_issues=[], leave_parent=None, attendance={},
                  contexts={}, projects={}, release="", logged={}, logged_range="")
     if not keep:
@@ -191,7 +202,7 @@ def api_reset():
 
 @app.post("/api/login")
 def api_login():
-    data = request.json or {}
+    data = _body()
     base_url = (data.get("base_url") or "https://tracking.i2cinc.com/").strip()
     method = data.get("method", "password")
     no_verify = data.get("no_verify_ssl", False)
@@ -225,7 +236,7 @@ def api_login():
 @app.post("/api/sso/start")
 def api_sso_start():
     """Begin the automatic Microsoft sign-in; the UI polls /api/sso/status."""
-    data = request.json or {}
+    data = _body()
     base_url = (data.get("base_url") or "https://tracking.i2cinc.com/").strip()
     verify_ssl = not data.get("no_verify_ssl", False)
 
@@ -254,7 +265,7 @@ def api_sso_cancel():
 def api_sprint():
     if not STATE["client"]:
         return jsonify(ok=False, error="Not logged in."), 401
-    data = request.json or {}
+    data = _body()
     client = STATE["client"]
     st = (data.get("st") or "").strip()
     release = (data.get("release") or "").strip()
@@ -311,7 +322,7 @@ def api_sprint():
 def api_tasks():
     if not STATE["client"]:
         return jsonify(ok=False, error="Not logged in."), 401
-    data = request.json or {}
+    data = _body()
     parent = (data.get("parent") or "").strip()
     # The page knows each ticket's project from step 2, so the usual case needs
     # no lookup at all: the Task list is per project and already cached.
@@ -357,7 +368,7 @@ def api_attendance():
 @app.post("/api/attendance/fetch")
 def api_attendance_fetch():
     """Pull the sheet off the attendance portal for the release from step 2."""
-    d = request.json or {}
+    d = _body()
     release = (d.get("release") or STATE["release"] or "").strip()
     start = (d.get("start") or "").strip()
     end = (d.get("end") or "").strip()
@@ -398,7 +409,7 @@ def api_logged():
     """
     if not STATE["client"]:
         return jsonify(ok=False, error="Not logged in."), 401
-    d = request.json or {}
+    d = _body()
     start, end = (d.get("start") or "").strip(), (d.get("end") or "").strip()
     if not (start and end):
         return jsonify(ok=False, error="Pick a start and end date first."), 400
@@ -423,7 +434,7 @@ def api_days():
     is work, leave or nothing at all. Step 4's calendar is drawn from this, so
     the days you can put a ticket on are exactly the days that will be created.
     """
-    d = request.json or {}
+    d = _body()
     start, end = (d.get("start") or "").strip(), (d.get("end") or "").strip()
     mode = d.get("mode", "attendance")
     if not (start and end):
@@ -473,7 +484,7 @@ def api_days():
 def api_plan():
     if not STATE["client"]:
         return jsonify(ok=False, error="Not logged in."), 401
-    d = request.json or {}
+    d = _body()
     mode = d.get("mode", "attendance")
     # Both modes read the sheet; they differ only in what a full day logs.
     if mode in ("attendance", "static") and not STATE["attendance"]:
@@ -512,7 +523,7 @@ def api_run():
     if not STATE["client"]:
         return jsonify(ok=False, error="Not logged in."), 401
     client = STATE["client"]
-    d = request.json or {}
+    d = _body()
     plan = d.get("plan", [])
     status_path = ["In Progress", "Done"]
 
