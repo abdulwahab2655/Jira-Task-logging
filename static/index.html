@@ -21,6 +21,9 @@
     padding:20px 22px;margin-bottom:16px;box-shadow:0 1px 0 rgba(0,0,0,.2)}
   .card.disabled{opacity:.45;pointer-events:none}
   .card h2{margin:0 0 14px;font-size:15px;display:flex;align-items:center;gap:9px}
+  /* Sits at the far end of the step-1 heading, so it is reachable at any point
+     without competing with anything in the card body. */
+  .signout{margin-left:auto;padding:5px 12px;font-size:12px}
   .step{width:22px;height:22px;border-radius:50%;background:var(--panel2);
     border:1px solid var(--line);display:inline-flex;align-items:center;
     justify-content:center;font-size:12px;color:var(--muted)}
@@ -331,6 +334,11 @@
   .wi-day.work:hover{border-color:var(--accent)}
   .wi-day.has{background:rgba(34,197,94,.13);box-shadow:inset 0 0 0 1px rgba(34,197,94,.5)}
   .wi-day.has .h{color:#86efac}
+  /* Part of the day is spoken for and part is still free: green enough to read
+     as "started", outlined enough to read as "still clickable". */
+  .wi-day.part-assigned{background:rgba(34,197,94,.07);
+    box-shadow:inset 0 0 0 1px rgba(34,197,94,.45)}
+  .wi-day.part-assigned .h{color:#86efac}
   .wi-day.sel{background:var(--accent);color:#fff;font-weight:700;box-shadow:none}
   .wi-day.sel .h{color:#dbeafe}
   .wi-count{font-size:11.5px;color:var(--muted);margin-top:11px}
@@ -351,12 +359,21 @@
   /* Ticket and Task share the first line; the title, which wants the room,
      gets the second. */
   .wi-cells{display:grid;gap:10px;align-items:end;
-    grid-template-columns:minmax(0,1fr) minmax(0,1fr) 40px}
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr) 96px 40px}
   .wi-cells > .wi-title{grid-column:1 / -1}
+  @media (max-width:760px){
+    .wi-cells{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 40px}
+    .wi-cells > .wi-hrs-cell{grid-column:1 / -1}
+  }
   @media (max-width:520px){
     .wi-cells{grid-template-columns:minmax(0,1fr) 40px}
     .wi-cells > div:nth-child(2){grid-column:1}
   }
+  /* Optional per-row hours. Blank means "the share of the day", which is what
+     it has always meant; a number means exactly that much and no more. */
+  .wi-cells .wi-rowhrs{width:100%;text-align:center;font-weight:600}
+  .wi-cells .wi-rowhrs.bad{border-color:rgba(239,68,68,.55);
+    box-shadow:0 0 0 3px rgba(239,68,68,.12)}
   .wi-cells label{margin-top:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .wi-cells .picker-btn{min-width:0}
   /* The button shows the key alone, so the full summary is confirmed here. */
@@ -412,7 +429,9 @@
 
   <!-- STEP 1: LOGIN -->
   <div class="card" id="c-login">
-    <h2><span class="step">1</span> Sign in <span class="pill" id="who"></span></h2>
+    <h2><span class="step">1</span> Sign in <span class="pill" id="who"></span>
+      <button type="button" id="btnSignOut" class="ghost signout"
+              style="display:none" onclick="signOut()">Sign out</button></h2>
     <div id="loginForm">
       <label>Jira URL<span class="req" title="Required">*</span></label>
       <input id="baseUrl" value="https://tracking.i2cinc.com/">
@@ -502,11 +521,11 @@
 
     <div class="row">
       <div><label>Start date<span class="req" title="Required">*</span></label>
-        <div class="datefield"><input id="start" type="date">
+        <div class="datefield"><input id="start" type="date" autocomplete="off">
           <button type="button" class="cal-btn" aria-label="Open calendar"
                   onclick="openCal('start',event)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></button></div></div>
       <div><label>End date<span class="req" title="Required">*</span></label>
-        <div class="datefield"><input id="end" type="date">
+        <div class="datefield"><input id="end" type="date" autocomplete="off">
           <button type="button" class="cal-btn" aria-label="Open calendar"
                   onclick="openCal('end',event)"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></button></div></div>
     </div>
@@ -642,8 +661,28 @@ let LOGGED_IN = false;
 const $ = id => document.getElementById(id);
 function show(el, type, text){ const m=$(el); m.className="msg show "+type; m.innerHTML=text; }
 function hide(el){ $(el).className="msg"; }
-function enable(card){ $(card).classList.remove("disabled"); }
+function enable(card){ $(card).classList.remove("disabled"); syncCardLocks(); }
 function markDone(card){ $(card).classList.add("done"); }
+
+// `pointer-events:none` only stops the mouse: a disabled card could still be
+// tabbed into, and the browser's own autofill would still drop a value in it.
+// Locking the controls themselves is the only thing that actually holds.
+// Anything already disabled for its own reasons is remembered and put back.
+function syncCardLocks(){
+  document.querySelectorAll(".card").forEach(card => {
+    const off = card.classList.contains("disabled");
+    card.querySelectorAll("input, select, textarea, button").forEach(el => {
+      if(off){
+        if(!el.hasAttribute("data-was-disabled"))
+          el.setAttribute("data-was-disabled", el.disabled ? "1" : "0");
+        el.disabled = true;
+      } else if(el.hasAttribute("data-was-disabled")){
+        el.disabled = el.getAttribute("data-was-disabled") === "1";
+        el.removeAttribute("data-was-disabled");
+      }
+    });
+  });
+}
 async function post(url, body){
   const r = await fetch(url, {method:"POST", headers:{"Content-Type":"application/json"},
     body: JSON.stringify(body)});
@@ -726,6 +765,7 @@ function onLoggedIn(user){
     const el=$(id); if(el) el.style.display="none";
   });
   $("who").textContent = user;
+  $("btnSignOut").style.display = "inline-block";
   show("mLogin","ok","Signed in as "+user);
   markDone("c-login"); enable("c-sprint");
 }
@@ -776,6 +816,9 @@ async function loadSprint(){
   markDone("c-sprint");
   enable("c-dates");
   $("c-items").classList.add("disabled");
+  // A different sprint means different tickets: whatever was assigned against
+  // the old ones goes.
+  resetBelow(2);
   // The release is known now, so go and get the attendance without being asked.
   if(!ATT_LOADED && !ATT_TIMER) fetchAttendance();
   refreshDates();
@@ -871,13 +914,28 @@ function prettyRange(note){
 // The release the sheet came from is almost always the range you want to log,
 // so offer it — but never overwrite dates already chosen, and never plan days
 // that haven't happened yet.
+// True once you have typed a date yourself. Guessed dates are ours to correct;
+// a date you chose is not.
+let DATES_TOUCHED = false;
+
 function applyReleaseDates(from, to){
   if(!from || !to) return;
   const today = calIso(new Date());
   if(to > today) to = today;
   if(from > to) return;
-  if(!$("start").value) $("start").value = from;
-  if(!$("end").value)   $("end").value   = to;
+  // The portal states the release's real span, so it supersedes whatever was
+  // guessed from the release number. Only a date you set yourself is left
+  // alone - before, any pre-filled guess blocked the real range from ever
+  // landing, which is why fetching attendance appeared to do nothing here.
+  const changed = ($("start").value !== from) || ($("end").value !== to);
+  if(!DATES_TOUCHED){
+    $("start").value = from;
+    $("end").value   = to;
+    if(changed) DAYS_KEY = "";        // the range moved: rebuild step 4
+  } else {
+    if(!$("start").value) $("start").value = from;
+    if(!$("end").value)   $("end").value   = to;
+  }
 }
 
 function showAttendanceSummary(days, work, leaves, note){
@@ -963,8 +1021,14 @@ function spanText(){
   out.textContent = `${fmt(d0)} → ${fmt(d1)} · ${days} day${days>1?"s":""}, ${week} weekday${week===1?"":"s"}`;
 }
 
+// The range/mode the current preview was built from. When step 3 moves away
+// from it, step 5 is describing something that no longer exists.
+let PLAN_BASIS = "";
+
 function refreshDates(){
   spanText();
+  const basis = [$("start").value, $("end").value, MODE].join("|");
+  if(PLAN.length && basis !== PLAN_BASIS) resetBelow(3);
   const box = $("attBox");
   if(box) box.classList.toggle("ok", ATT_LOADED);
   const ready = datesReady() && ISSUES.length > 0;
@@ -978,8 +1042,10 @@ function refreshDates(){
     $("c-run").classList.add("disabled");
   } else loadDays();
 }
-$("start").onchange = $("end").onchange = refreshDates;
-$("start").oninput = $("end").oninput = refreshDates;
+// A real edit marks the dates as yours; a programmatic .value assignment does
+// not fire these, so the portal filling them in keeps them "untouched".
+$("start").onchange = $("end").onchange = () => { DATES_TOUCHED = true; refreshDates(); };
+$("start").oninput  = $("end").oninput  = () => { DATES_TOUCHED = true; refreshDates(); };
 
 // drag & drop
 const drop=$("drop"), fileInput=$("file");
@@ -1165,9 +1231,11 @@ function loadDays(){
     DAYS.forEach(d => DAY[d.date] = d);
     // A day that left the range, or stopped being a working day, can't keep
     // the tickets that were on it.
-    Object.keys(ITEMS).forEach(iso => {
-      if(!DAY[iso] || !DAY[iso].minutes) delete ITEMS[iso]; });
-    SEL = SEL.filter(iso => DAY[iso] && DAY[iso].minutes);
+    // A claimed absent day owes no hours of its own, so it is kept on the
+    // strength of being absent rather than of having minutes left.
+    const stillValid = iso => !!DAY[iso] && (DAY[iso].minutes > 0 || isAbsent(iso));
+    Object.keys(ITEMS).forEach(iso => { if(!stillValid(iso)) delete ITEMS[iso]; });
+    SEL = SEL.filter(stillValid);
     showLoggedSummary();
     wiDraw(); wiRenderList(); wiSelectionChanged(); itemsChanged();
   }, 200);
@@ -1199,15 +1267,25 @@ function wiDraw(){
     let sub = "", tip = "";
     if(info && info.minutes){
       cls.push("work");
-      // The hours on the box are the hours still missing, so a day logged
-      // short shows what is left to give rather than the whole day again.
-      sub = info.hours.replace(/\s+/g, "");   // '9h 30m' -> '9h30m', it is a 40px box
+      const left = remainingMins(iso), mine = assignedMins(iso);
+      // The hours on the box are the hours still missing - what Jira already
+      // holds, and now what you have assigned here too, so the day counts down
+      // as you fill it in.
+      sub = (left ? fmtMinutes(left) : "<b>✓</b>").replace(/\s+/g, "");
       if(info.logged){
         cls.push("part");
         tip = info.logged_hours + " of " + info.target_hours +
               " already in Jira — " + info.hours + " left to log";
       }
-      if(ITEMS[iso]) cls.push("has");
+      if(mine){
+        // Assigned in full, or only in part: a part-filled day stays clickable
+        // so the rest of it can go somewhere else.
+        cls.push(left ? "part-assigned" : "has");
+        tip = fmtMinutes(mine) + " assigned here" +
+              (left ? " — " + fmtMinutes(left) + " of the day still free"
+                    : " — the whole day is spoken for") +
+              (info.logged ? " (" + info.logged_hours + " already in Jira)" : "");
+      }
       if(SEL.includes(iso)) cls.push("sel");
     } else if(info && info.full){
       // Already logged in full: there is nothing to choose, so there is
@@ -1251,9 +1329,10 @@ function wiDraw(){
 // One line saying where the range stands, so 'Select unassigned' has an
 // obvious size and the greyed-out days are accounted for.
 function wiCount(){
-  const need = DAYS.filter(d => d.minutes).length;
+  // Counted on what is still free, so the line falls as the plan fills up.
+  const need = DAYS.filter(d => d.minutes && remainingMins(d.date) > 0).length;
   const done = DAYS.filter(d => d.full).length;
-  const mins = DAYS.reduce((n, d) => n + (d.minutes || 0), 0);
+  const mins = DAYS.reduce((n, d) => n + (d.minutes ? remainingMins(d.date) : 0), 0);
   const bits = [];
   bits.push(need ? "<b>" + need + (need === 1 ? " day" : " days") + "</b> still " +
                    "need hours (" + fmtMinutes(mins) + ")"
@@ -1295,7 +1374,7 @@ function wiDayClick(iso, ev){
 function wiSelectRest(){
   // Days that owe hours only. An absent day is never swept up here: there is
   // no telling what it is worth, so it is yours to claim deliberately.
-  SEL = DAYS.filter(d => d.minutes && !ITEMS[d.date]).map(d => d.date);
+  SEL = DAYS.filter(d => d.minutes && remainingMins(d.date) > 0).map(d => d.date);
   ANCHOR = SEL[0] || null;
   if(SEL.length) WI_MONTH = monthOf(SEL[0]);
   wiDraw(); wiSelectionChanged();
@@ -1308,7 +1387,60 @@ function sigOf(rows){
     r => [r.parent, r.task_value, r.title || "", r.share, r.hours || ""]));
 }
 function newRow(){
-  return {id: ++ROW_SEQ, parent:"", task:"", title:"", share:100, mins:0};
+  return {id: ++ROW_SEQ, parent:"", task:"", title:"", share:100, mins:0, hrs:""};
+}
+
+// What a row would log if its Hours box is left blank: its share of whichever
+// day is selected. Shown as the placeholder so "optional" is not a mystery.
+function rowHint(r, dayMins){
+  if(absentSel()) return "e.g. 5h";
+  const left = SEL.length === 1 ? remainingMins(SEL[0]) : dayMins;
+  if(!left) return "e.g. 5h";
+  const pct = ROWS.length > 1 ? (r.share || 0) / 100 : 1;
+  return fmtMinutes(Math.round(left * pct));
+}
+
+// The typed hours for a row, or null when it is blank (= take the share).
+function rowStated(r){
+  const m = parseHours(r.hrs);
+  if(m && m > 0) return m;
+  // The multi-row Hours tab keeps its minutes in r.mins rather than in the box
+  // above, so those count as stated too and a split typed there still logs
+  // exactly what it shows.
+  if(splitIsHours() && r.mins > 0) return r.mins;
+  return null;
+}
+
+function wiRowHours(id, text){
+  const r = ROWS.find(x => x.id === id);
+  if(!r) return;
+  r.hrs = text;
+  const box = $("rx-" + id);
+  const bad = text.trim() !== "" && parseHours(text) === null;
+  if(box) box.classList.toggle("bad", bad);
+  wiUpdateSplit();                    // no re-render: you are still typing in it
+}
+
+// ---- what a day already carries -----------------------------------------
+// Every row stored on a day states its own hours, so a day's assigned total is
+// just their sum. This is what lets the calendar count down as you assign.
+function assignedMins(iso){
+  return (ITEMS[iso] || []).reduce(
+    (t, r) => t + (durationMinutes(r.hours) || 0), 0);
+}
+// What a day still owes after what you have already put on it.
+function remainingMins(iso){
+  const d = DAY[iso];
+  if(!d) return 0;
+  return Math.max(0, (d.minutes || 0) - assignedMins(iso));
+}
+// A day is settled once it owes nothing more - either Jira had it all, or you
+// have now assigned all of it.
+function dayDone(iso){
+  const d = DAY[iso];
+  if(!d) return false;
+  if(isAbsent(iso)) return !!(ITEMS[iso] || []).length;
+  return (d.minutes || 0) > 0 && remainingMins(iso) === 0;
 }
 
 // '4h 30m' · '4.5' · '4:30' · '90m' -> minutes. null when it means nothing.
@@ -1327,8 +1459,10 @@ function parseHours(text){
 // otherwise '4h' would mean a different share of each day.
 function selTotal(){
   if(!SEL.length) return null;
-  const first = DAY[SEL[0]] ? DAY[SEL[0]].minutes : 0;
-  return SEL.every(iso => DAY[iso] && DAY[iso].minutes === first) ? first : null;
+  // What is still free on the day, not what the day is worth: a day already
+  // half spoken for has only its other half left to divide.
+  const first = remainingMins(SEL[0]);
+  return SEL.every(iso => DAY[iso] && remainingMins(iso) === first) ? first : null;
 }
 // A selection of absent days only. They carry no hours of their own, so the
 // hours are always typed rather than shared out of a day - even for one row.
@@ -1339,13 +1473,14 @@ function mixedSel(){
   return SEL.some(isAbsent) && SEL.some(iso => !isAbsent(iso));
 }
 function splitIsHours(){
-  if(absentSel()) return true;
+  // Absent days used to force this strip on; the per-row Hours box does that
+  // job now for every kind of day, so there is only one place to type hours.
   return SPLIT_BY === "hrs" && ROWS.length > 1 && !!selTotal();
 }
 
 function wiSelectionChanged(){
   const n = SEL.length;
-  const mins = SEL.reduce((t, iso) => t + (DAY[iso] ? DAY[iso].minutes : 0), 0);
+  const mins = SEL.reduce((t, iso) => t + remainingMins(iso), 0);
   $("wiSel").textContent = n === 0 ? "No day selected"
     : n === 1 ? "Editing " + fmtDay(SEL[0])
     : n + " days selected";
@@ -1356,25 +1491,22 @@ function wiSelectionChanged(){
         : absentSel()
           ? (n === 1 ? "Absent - type the hours you want logged against it"
                      : n + " absent days - the hours you type go against each")
-        : n === 1 ? (DAY[SEL[0]].hours || "nothing") + " to log" +
+        : n === 1 ? ((remainingMins(SEL[0]) ? fmtMinutes(remainingMins(SEL[0]))
+                                            : "nothing") + " left to log") +
                  (DAY[SEL[0]].logged
                    ? " (" + DAY[SEL[0]].logged_hours + " of " +
                      DAY[SEL[0]].target_hours + " already in Jira)" : "")
-               : fmtMinutes(mins) + " across " + n + " days") +
-      (SEL.some(iso => ITEMS[iso]) ? " · already assigned — adding replaces it" : "");
-  // Re-open what is already on the selected days when they agree; otherwise
-  // start from one empty row.
-  const sigs = [...new Set(SEL.map(iso => sigOf(ITEMS[iso])))];
-  if(n && sigs.length === 1 && ITEMS[SEL[0]]){
-    ROWS = ITEMS[SEL[0]].map(r => ({id: ++ROW_SEQ, parent:r.parent,
-      task:r.task_value, title:r.title || "", share:r.share,
-      mins: r.hours ? durationMinutes(r.hours) : 0}));
-    // A day divided by hours reopens on the Hours tab, as it was left.
-    SPLIT_BY = ROWS.length > 1 && ROWS.every(r => r.mins) ? "hrs" : "pct";
-  } else {
-    ROWS = [newRow()];
-    SPLIT_BY = "pct";
-  }
+               : fmtMinutes(mins) + " still free across " + n + " days") +
+      // Days add up rather than overwrite, so what is already there is a
+      // starting point, not something about to be lost.
+      (SEL.some(iso => assignedMins(iso))
+        ? " · " + fmtMinutes(SEL.reduce((t, i) => t + assignedMins(i), 0)) +
+          " already assigned — this adds to it" : "");
+  // Always a fresh row. What a day already holds is listed below and stays
+  // there: assigning again adds to the day rather than replacing it, so
+  // re-opening the old rows would only invite them to be entered twice.
+  ROWS = [newRow()];
+  SPLIT_BY = "pct";
   if(!selTotal()) SPLIT_BY = "pct";
   if(SPLIT_BY === "pct" && ROWS.length > 1)
     splitMinutes(100, ROWS.map(r => r.share)).forEach((pct, i) => ROWS[i].share = pct);
@@ -1421,10 +1553,8 @@ function wiRenderRows(){
     return;
   }
   const absent = absentSel();
-  // An absent day still needs its hours typed with a single row, so the split
-  // strip stays on show for it.
-  const multi = ROWS.length > 1 || absent;
-  if(ROWS.length <= 1 && !absent) SPLIT_BY = "pct";   // one row owns the day anyway
+  const multi = ROWS.length > 1;
+  if(!multi) SPLIT_BY = "pct";              // one row owns the day anyway
   const hours = splitIsHours(), dayMins = selTotal() || 0;
   $("wiRows").innerHTML = ROWS.map((r, i) => `
     <div class="wi-row${i ? " extra" : ""}">
@@ -1438,6 +1568,11 @@ function wiRenderRows(){
           <div class="picker"><select id="rt-${r.id}" onchange="wiRowChanged(${r.id},'task')"></select>
             <button type="button" class="picker-btn empty" id="pb-rt-${r.id}"
               onclick="openPick('rt-${r.id}',event)"><span class="picker-label">—</span>${CHEV}</button></div></div>
+        <div class="wi-hrs-cell"><label>Hours <span class="muted">(optional)</span></label>
+          <input class="wi-rowhrs" id="rx-${r.id}" value="${esc(r.hrs || "")}"
+                 placeholder="${esc(rowHint(r, dayMins))}" autocomplete="off"
+                 title="Leave blank to use the whole share of the day. Type e.g. 5h or 2h 30m to log just that much and leave the rest of the day free."
+                 oninput="wiRowHours(${r.id}, this.value)"></div>
         <button class="wi-x" type="button" onclick="wiRemoveRow(${r.id})"
                 title="Remove this ticket"${multi ? "" : ' style="visibility:hidden"'}>&#10005;</button>
         <div class="wi-title"><label>Title <span class="muted">(optional — what
@@ -1632,7 +1767,7 @@ function wiNameLines(){
 
 function wiUpdateSplit(){
   const absent = absentSel();
-  const multi = ROWS.length > 1 || absent;
+  const multi = ROWS.length > 1;
   const hours = splitIsHours(), day = selTotal() || 0;
 
   $("wiTools").style.display = multi ? "flex" : "none";
@@ -1658,16 +1793,29 @@ function wiUpdateSplit(){
   // The only thing worth an error is a division that doesn't add up. A row not
   // filled in yet just keeps the button off — no scolding.
   let problem = "";
-  if(mixedSel()){
+  // The optional per-row Hours box is checked first: it is the one thing that
+  // can be typed on any selection, and asking for more than the day has left
+  // is the only way to get it wrong.
+  const badHrs = ROWS.some(r => (r.hrs || "").trim() !== "" && parseHours(r.hrs) === null);
+  const statedTotal = ROWS.reduce((t, r) => t + (rowStated(r) || 0), 0);
+  const tightest = SEL.length ? Math.min(...SEL.map(remainingMins)) : 0;
+  if(badHrs){
+    problem = "That is not an amount of time — try 5h, 2h 30m or 90m.";
+  } else if(statedTotal && !absentSel() && SEL.length && statedTotal > tightest){
+    problem = "That asks for " + fmtMinutes(statedTotal) + ", but " +
+              (SEL.length === 1 ? "the day has " : "the smallest day selected has ") +
+              (tightest ? "only " + fmtMinutes(tightest) : "nothing") + " left.";
+  } else if(mixedSel()){
     problem = "Absent days are assigned on their own - they carry no hours of " +
               "their own, so you type what they are worth.";
   } else if(absent){
     // No day to add up to, so the only thing that can be wrong is asking for
     // nothing at all.
-    const sum = ROWS.reduce((t, r) => t + (r.mins || 0), 0);
-    if(sum <= 0)
+    if(statedTotal <= 0)
       problem = "Type the hours to log against " +
                 (SEL.length === 1 ? "this absent day." : "each absent day.");
+  } else if(statedTotal){
+    /* every row's hours are stated outright: nothing left to add up */
   } else if(hours){
     const sum = ROWS.reduce((t, r) => t + (r.mins || 0), 0);
     if(sum > day)
@@ -1690,39 +1838,51 @@ function wiUpdateSplit(){
     ROWS.some(r => !r.parent || !r.task);
 }
 
+// What each row logs on one particular day. A row that named its hours gets
+// exactly them; the rest share out whatever the day still owes. Days are
+// resolved one at a time because they need not owe the same amount.
+function resolveRows(iso){
+  const stated = ROWS.map(rowStated);
+  if(isAbsent(iso)) return stated.map(m => m || 0);
+  const room = remainingMins(iso);
+  const out = stated.slice();
+  const rest = stated.map((m, i) => m == null ? i : -1).filter(i => i >= 0);
+  if(rest.length){
+    const fixed = stated.reduce((t, m) => t + (m || 0), 0);
+    const parts = splitMinutes(Math.max(0, room - fixed), rest.map(i => ROWS[i].share));
+    rest.forEach((i, k) => out[i] = parts[k]);
+  }
+  return out.map(m => m || 0);
+}
+
 function wiCommit(){
   hide("mItems");
-  const absent = absentSel();
-  const multi = ROWS.length > 1, hours = splitIsHours(), day = selTotal() || 0;
-  const rows = ROWS.map(r => {
-    // The title travels with the day. Days that group into one sub-task can
-    // carry different ones, and the preview then offers them as its name.
-    const row = {parent:r.parent, task_value:r.task,
-                 title:(r.title || "").trim()};
-    if(absent){
-      // An absent day has no total to take a share of, so the hours stand on
-      // their own and the backend logs exactly them.
-      row.hours = fmtMinutes(r.mins || 0);
-      row.share = 100;
-    } else if(hours){
-      // The weight is the exact fraction of the day, so the backend's own split
-      // reproduces the hours typed here to the minute.
-      row.share = (r.mins || 0) / day * 100;
-      row.hours = fmtMinutes(r.mins || 0);
-    } else row.share = multi ? r.share : 100;
-    return row;
-  });
-  let n = 0;
+  let n = 0, added = 0;
   SEL.forEach(iso => {
     // A day owing hours, or an absent day you chose to claim.
-    if(DAY[iso] && (DAY[iso].minutes || isAbsent(iso))){
-      ITEMS[iso] = rows.map(r => Object.assign({}, r));
-      n++;
-    }
+    if(!(DAY[iso] && (DAY[iso].minutes || isAbsent(iso)))) return;
+    const mins = resolveRows(iso);
+    // Every stored row states its own hours, so what a day holds can be added
+    // up without needing to know the day it came from.
+    const rows = ROWS.map((r, i) => ({
+      parent: r.parent, task_value: r.task,
+      // The title travels with the day. Days that group into one sub-task can
+      // carry different ones, and the preview then offers them as its name.
+      title: (r.title || "").trim(),
+      share: r.share, hours: fmtMinutes(mins[i])
+    })).filter((_, i) => mins[i] > 0);
+    if(!rows.length) return;
+    // Added, not replaced: a day can be filled in over several passes, and the
+    // calendar counts down as it is.
+    ITEMS[iso] = (ITEMS[iso] || []).concat(rows);
+    added += mins.reduce((t, m) => t + m, 0);
+    n++;
   });
   SEL = []; ANCHOR = null;
   wiDraw(); wiRenderList(); wiSelectionChanged(); itemsChanged();
-  show("mItems", "ok", n + " day" + (n === 1 ? "" : "s") + " added to the plan.");
+  if(!n){ show("mItems", "err", "Nothing was added — those days have no hours left to give."); return; }
+  show("mItems", "ok", n + " day" + (n === 1 ? "" : "s") + " added to the plan (" +
+       fmtMinutes(added) + ").");
 }
 
 // ---- what has been assigned so far ---------------------------------------
@@ -1763,8 +1923,12 @@ function wiRenderList(){
            plan builds up here.${loggedNote()}</div></div></div>`;
     return;
   }
-  const assigned = Object.keys(ITEMS).length, total = workDates().length;
-  const left = total - assigned;
+  // Counted by hours owed, not by days touched: a day given 5h of its 8h is
+  // not finished with, and saying otherwise would hide the other 3h.
+  const work = workDates();
+  const total = work.length;
+  const left = work.filter(iso => remainingMins(iso) > 0).length;
+  const assigned = total - left;
   const rows = groups.map((g, gi) => g.rows.map((r, ri) => `<tr>
       ${ri ? "" : `<td rowspan="${g.rows.length}">${groupLabel(g)}</td>`}
       <td>${r.parent}</td>
@@ -1779,11 +1943,11 @@ function wiRenderList(){
        <div><div class="strip-title">Work items
          <span class="badge ${left ? "info show" : ""}">${assigned} of ${total} work days</span></div>
          <div class="hint">${(left
-           ? left + " working day" + (left === 1 ? "" : "s") + " still unassigned — they will be skipped."
+           ? left + " working day" + (left === 1 ? "" : "s") + " still owe hours — what is left of them will be skipped."
            : "Every working day that still needs hours has a ticket.") + loggedNote()}</div></div>
      </div>
      <div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Ticket</th><th>Task</th>
-     <th>Title</th><th>Split</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+     <th>Title</th><th>Hours</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function wiRemoveGroup(i){
@@ -1794,6 +1958,29 @@ function wiRemoveGroup(i){
 }
 
 // Changing the work items invalidates any plan built from the old ones.
+// Anything built on a step is only as good as that step. When one of them
+// changes, what follows is cleared rather than left sitting there looking
+// valid - a plan against last sprint's tickets is worse than no plan.
+//   2 = sprint & issue   3 = dates & attendance   4 = work items
+function resetBelow(step){
+  // Only a sprint change invalidates the assignments outright - the tickets
+  // they name are gone. A change of dates is gentler: loadDays drops the days
+  // that left the range and keeps the rest.
+  if(step <= 2){
+    ITEMS = {}; SEL = []; ANCHOR = null;
+    if(typeof wiDraw === "function"){ wiDraw(); wiRenderList(); wiSelectionChanged(); }
+  }
+  PLAN = []; PLAN_CAP = "24h"; RESULTS = []; TITLES = {};
+  $("planWrap").innerHTML = "";
+  $("planNotes").innerHTML = "";
+  $("c-run").classList.add("disabled");
+  $("c-run").classList.remove("done");
+  $("c-items").classList.remove("done");
+  $("c-result").style.display = "none";
+  $("btnPreview").disabled = !Object.keys(ITEMS).length;
+  syncCardLocks();
+}
+
 function itemsChanged(){
   const any = Object.keys(ITEMS).length > 0;
   $("c-items").classList.toggle("done", any);
@@ -1823,6 +2010,7 @@ async function preview(){
     if(kept != null && kept !== e.label){ e._i = i; planTitle(i, kept); }
   });
   if(res.cap) PLAN_CAP = res.cap;
+  PLAN_BASIS = [$("start").value, $("end").value, MODE].join("|");
   if(!PLAN.length){ show("mItems", "info", "Nothing to create for these days."); return; }
   planNotes(res);
   renderPlan();
@@ -2398,6 +2586,14 @@ function logAnother(){
 
 // Start over means start over: clear the session on the backend first, or the
 // reload would just restore it below and nothing would look reset.
+// Signing out is Start over plus the session: the backend drops the client, so
+// the reloaded page comes back to the sign-in form rather than restoring it.
+async function signOut(){
+  if(!confirm("Sign out? Anything not yet created will be lost.")) return;
+  try{ await fetch("/api/reset", {method:"POST"}); }catch(e){}
+  location.reload();
+}
+
 async function startOver(){
   try{ await fetch("/api/reset", {method:"POST"}); }catch(e){}
   location.reload();

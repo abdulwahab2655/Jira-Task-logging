@@ -1431,6 +1431,38 @@ def build_plan(*, start: str, end: str, mode: str, attendance: dict,
     return entries
 
 
+def _row_minutes(rows: list, room: int) -> list[int]:
+    """
+    How many minutes each row of a day gets.
+
+    Rows that state their own `hours` are taken at their word, which is what
+    lets a day be assigned in parts - 5h to one ticket now, the other 3h to
+    another later - rather than always being divided up in one go. Anything
+    over what the day still owes is scaled back down so a day can never
+    overrun itself.
+
+    Rows with no hours fall back to `share`, exactly as they always did, so a
+    day assigned in one pass (and every CLI caller) behaves as before.
+    """
+    stated = [duration_minutes(r.get("hours")) if r.get("hours") else None
+              for r in rows]
+    if not any(m is not None for m in stated):
+        return split_minutes(room, [r.get("share") for r in rows])
+    # Mixed rows: the ones that named their hours keep them, and whatever is
+    # left of the day is shared out among the rest by their shares.
+    fixed = sum(m for m in stated if m)
+    if fixed >= room:
+        # They ask for at least the whole day: give them the day, in proportion.
+        return split_minutes(room, [m or 0 for m in stated])
+    rest = [i for i, m in enumerate(stated) if m is None]
+    out = [m or 0 for m in stated]
+    if rest:
+        share = split_minutes(room - fixed, [rows[i].get("share") for i in rest])
+        for i, mins in zip(rest, share):
+            out[i] = mins
+    return out
+
+
 def _absent_entries(date: str, rows: list, day: dict, already: list) -> list:
     """
     What to create for a day the sheet marks absent.
@@ -1500,7 +1532,7 @@ def build_plan_items(*, start: str, end: str, mode: str, attendance: dict,
             if not rows:
                 unassigned.append(d)
             else:
-                minutes = split_minutes(day["work"], [r.get("share") for r in rows])
+                minutes = _row_minutes(rows, day["work"])
                 for row, mins in zip(rows, minutes):
                     if mins <= 0:
                         continue                    # a 0% row creates nothing
