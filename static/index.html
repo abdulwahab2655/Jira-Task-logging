@@ -291,7 +291,7 @@
   /* The calendar is a fixed, compact column: it only ever holds seven columns
      of two-character days, so the space it used to take went to the editor,
      which actually has fields to lay out. */
-  .wi{display:grid;grid-template-columns:minmax(0,296px) minmax(0,1fr);gap:16px;
+  .wi{display:grid;grid-template-columns:minmax(0,324px) minmax(0,1fr);gap:16px;
     align-items:start;margin-top:12px}
   @media (max-width:880px){ .wi{grid-template-columns:1fr} }
   .wi-panel{background:var(--panel2);border:1px solid var(--line);border-radius:12px;
@@ -300,26 +300,31 @@
   .wi-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
   .wi-dow{font-size:9px;font-weight:700;color:var(--muted);text-align:center;padding:2px 0;
     text-transform:uppercase}
-  .wi-day{height:38px;border-radius:8px;display:flex;flex-direction:column;align-items:center;
-    justify-content:center;font-size:12px;line-height:1.05;background:var(--panel);
+  .wi-day{height:46px;border-radius:9px;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;font-size:13px;line-height:1;background:var(--panel);
     border:1px solid transparent;cursor:pointer;user-select:none;transition:.12s;
-    padding:2px 1px;overflow:hidden;min-width:0;position:relative}
-  /* Tabular figures keep '8h4m' and '11h11m' the same width, and the label is
-     clipped rather than allowed to widen the cell. */
-  .wi-day .h{font-size:8px;font-weight:700;color:var(--muted);margin-top:1px;
-    letter-spacing:-.1px;white-space:nowrap;font-variant-numeric:tabular-nums;
-    max-width:100%;overflow:hidden}
+    padding:4px 2px;overflow:hidden;min-width:0;position:relative;font-weight:500}
+  /* The number is the day and the chip under it is the hours: two different
+     things, so they get air between them rather than reading as one stacked
+     blob. Tabular figures keep '8h4m' and '11h11m' the same width, and the
+     chip is clipped rather than allowed to widen the cell. */
+  .wi-day .h{font-size:8px;font-weight:700;color:var(--muted);margin-top:5px;
+    letter-spacing:-.2px;white-space:nowrap;font-variant-numeric:tabular-nums;
+    max-width:100%;overflow:hidden;line-height:1;padding:2px 3px;border-radius:5px;
+    background:rgba(148,163,184,.12);text-overflow:clip}
+  /* A tick is a mark, not a measurement: no chip behind it. */
+  .wi-day .h.mark{background:none;padding:0;font-size:11px;margin-top:4px}
   .wi-day.blank{visibility:hidden}
   .wi-day.off{background:transparent;color:#475569;cursor:default}
   .wi-day.leave{background:rgba(168,85,247,.13);color:#d8b4fe;cursor:default}
-  .wi-day.leave .h{color:#c084fc}
+  .wi-day.leave .h{color:#c084fc;background:rgba(168,85,247,.20)}
   /* Absent / unmarked: the portal recorded no hours and no leave, so there is
      nothing to log automatically. It stays clickable - you say what it is
      worth - but 'Select unassigned' never sweeps it up. */
   .wi-day.absent{background:rgba(244,63,94,.10);color:#fda4af;
                  box-shadow:inset 0 0 0 1px rgba(244,63,94,.45);cursor:pointer}
   .wi-day.absent:hover{box-shadow:inset 0 0 0 1px rgba(244,63,94,.85)}
-  .wi-day.absent .h{color:#fb7185;font-weight:700}
+  .wi-day.absent .h{color:#fb7185;font-weight:700;background:rgba(244,63,94,.20)}
   .abs-n{color:#fb7185}
   .part-n{color:#fcd34d}
   .wi-day.absent.has{background:rgba(34,197,94,.13);
@@ -330,26 +335,26 @@
   /* Already on the Jira timesheet: nothing to do with it, so it reads as
      settled rather than as a day you forgot to click. */
   .wi-day.full{background:transparent;color:#6d7e95;cursor:default;box-shadow:none}
-  .wi-day.full .h{color:#6d7e95;font-weight:600;margin-top:2px}
+  .wi-day.full .h{color:#6d7e95;font-weight:600;margin-top:4px;background:none;padding:0}
   .wi-day.full .h b{font-size:11px;font-weight:700;color:rgba(134,239,172,.6)}
   /* Logged, but for less than the attendance says: the hours shown are the
      missing ones, so the amber ring is a nudge, not a warning. */
   .wi-day.part{box-shadow:inset 0 0 0 1px rgba(245,158,11,.6)}
-  .wi-day.part .h{color:#fcd34d}
+  .wi-day.part .h{color:#fcd34d;background:rgba(245,158,11,.18)}
   .wi-day.part.sel .h{color:#fef3c7}
   /* Only the days you can act on carry an outline, so four clickable days
      don't disappear among twenty settled ones. */
   .wi-day.work{box-shadow:inset 0 0 0 1px #3a4b63}
   .wi-day.work:hover{border-color:var(--accent)}
   .wi-day.has{background:rgba(34,197,94,.13);box-shadow:inset 0 0 0 1px rgba(34,197,94,.5)}
-  .wi-day.has .h{color:#86efac}
+  .wi-day.has .h{color:#86efac;background:rgba(34,197,94,.20)}
   /* Part of the day is spoken for and part is still free. Deliberately NOT
      green: green is "settled", and a day still owing hours must not read as
      finished. Amber is the same colour the calendar already uses for a day
      that is short, which is exactly what this is. */
   .wi-day.part-assigned{background:rgba(245,158,11,.10);
     box-shadow:inset 0 0 0 1px rgba(245,158,11,.65)}
-  .wi-day.part-assigned .h{color:#fcd34d}
+  .wi-day.part-assigned .h{color:#fcd34d;background:rgba(245,158,11,.20)}
   /* A day that is short in Jira and a day you have half-assigned are both
      amber; only this dot says which of them you did. */
   .wi-day.part-assigned::after,.wi-day.has::after{content:"";position:absolute;
@@ -359,7 +364,7 @@
   .wi-day.part-assigned.sel{background:var(--accent);box-shadow:none}
   .wi-day.part-assigned.sel .h{color:#dbeafe}
   .wi-day.sel{background:var(--accent);color:#fff;font-weight:700;box-shadow:none}
-  .wi-day.sel .h{color:#dbeafe}
+  .wi-day.sel .h{color:#dbeafe;background:rgba(255,255,255,.20)}
   .wi-count{font-size:11.5px;color:var(--muted);margin-top:11px}
   .wi-count b{color:var(--text);font-weight:600}
   .wi-legend{display:flex;gap:7px 11px;flex-wrap:wrap;margin-top:8px;font-size:10.5px;
@@ -1351,7 +1356,11 @@ function wiDraw(){
     } else cls.push("off");
     html += '<div class="' + cls.join(" ") + '" data-iso="' + iso + '" title="' +
             esc(tip) + '">' +
-            d.getDate() + (sub ? '<span class="h">' + sub + "</span>" : "") + "</div>";
+            d.getDate() + (sub ? '<span class="h' +
+              // A tick or a '!' is a mark, not a measurement, so it drops the
+              // chip the hours wear.
+              (sub.indexOf("<b>") >= 0 ? " mark" : "") + '">' + sub + "</span>" : "") +
+            "</div>";
   }
   grid.innerHTML = html;
   // Absent days are clickable too: they are the one kind of day you have to
