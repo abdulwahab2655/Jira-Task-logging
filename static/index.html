@@ -28,6 +28,9 @@
   .signout:hover{background:rgba(248,113,113,.12);border-color:rgba(248,113,113,.6);
     color:#fecaca}
   .signout svg{flex:0 0 auto}
+  /* Step 1 is a heading and nothing else once you are in; a message, when
+     there is one, brings its own space above it. */
+  #c-login h2{margin-bottom:0}
   .signout.busy{opacity:.6;pointer-events:none}
   .step{width:22px;height:22px;border-radius:50%;background:var(--panel2);
     border:1px solid var(--line);display:inline-flex;align-items:center;
@@ -126,6 +129,9 @@
   .msg.info{background:rgba(59,130,246,.12);color:#93c5fd;border:1px solid rgba(59,130,246,.3)}
   .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;
     background:var(--panel2);border:1px solid var(--line);color:var(--muted);margin-left:8px}
+  /* An empty pill is still a bordered box: the one that holds your name sits
+     in the step-1 heading from the start, so hide it until it says something. */
+  .pill:empty{display:none}
   .drop{border:2px dashed var(--line);border-radius:12px;padding:26px;text-align:center;
     color:var(--muted);cursor:pointer;transition:.15s;background:var(--panel2)}
   .drop.hover{border-color:var(--accent);color:var(--text);background:rgba(59,130,246,.08)}
@@ -183,11 +189,67 @@
   @keyframes spin{to{transform:rotate(360deg)}}
   .hint{font-size:12px;color:var(--muted);margin-top:6px}
   .req{color:var(--err);margin-left:3px;font-weight:700}
-  .ms-btn{display:flex;align-items:center;justify-content:center;width:100%;
-    background:#fff;color:#3c4043;border:1px solid #8c8c8c;border-radius:9px;
-    padding:11px;font-size:14px;font-weight:600;cursor:pointer;margin-top:14px}
-  .ms-btn:hover{background:#f3f3f3}
-  .or{text-align:center;color:var(--muted);font-size:12px;margin:16px 0 4px}
+  /* Step 1 is one button, shaped like the attendance portal's: a white pill,
+     the logo beside the words, and nothing else competing with it. */
+  .sso-btn{display:flex;align-items:center;justify-content:center;width:100%;
+    background:#fff;color:#172b4d;border:1px solid #cfd6e4;border-radius:999px;
+    padding:13px;font-size:14.5px;font-weight:600;cursor:pointer;margin-top:4px;
+    transition:.15s;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+  .sso-btn:hover:not(:disabled){background:#f4f6fb;border-color:#a9b4c9}
+  .sso-btn:disabled{opacity:.72;cursor:progress}
+  /* The spinner is white-on-dark everywhere else; on the pill it is the
+     reverse, or it disappears into the button. */
+  .sso-btn .spinner{border-color:rgba(23,43,77,.25);border-top-color:#172b4d}
+  .sso-btn:active:not(:disabled){transform:translateY(1px)}
+  .sso-btn:focus-visible{outline:3px solid rgba(59,130,246,.5);outline-offset:3px}
+  .sso-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+
+  /* ---- The sign-in screen ------------------------------------------------
+     Signed out, none of the steps can do anything, so they are not shown at
+     all: the sign-in takes the middle of the window instead of sitting at the
+     top of five disabled cards. A `signed-out` class on the page body is what
+     switches between the two, and it is in the markup from the start so the
+     wizard never flashes up before we know who you are. */
+  #gate{display:none}
+  body.signed-out h1, body.signed-out .sub, body.signed-out .card{display:none}
+  body.signed-out #gate{display:flex}
+  /* A soft light from above, so the card sits on something rather than
+     floating on a flat field. */
+  body.signed-out::before{content:"";position:fixed;inset:0;pointer-events:none;
+    background:radial-gradient(58% 42% at 50% 0%,rgba(59,130,246,.14),transparent 72%)}
+  body.signed-out .wrap{padding-bottom:28px}
+  .gate{flex-direction:column;align-items:center;justify-content:center;
+    min-height:calc(100vh - 56px)}
+  .gate-card{position:relative;width:100%;max-width:436px;background:var(--panel);
+    border:1px solid var(--line);border-radius:18px;padding:34px 32px 26px;
+    box-shadow:0 20px 44px rgba(0,0,0,.38);text-align:center}
+  .gate-mark{width:54px;height:54px;margin:0 auto 18px;border-radius:16px;
+    display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(145deg,#1d4ed8,#3b82f6);
+    box-shadow:0 8px 20px rgba(37,99,235,.4)}
+  .gate-title{font-size:20px;font-weight:700;margin:0 0 7px;letter-spacing:-.2px}
+  .gate-sub{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 24px}
+  /* The messages and the fallback form read left-to-right like text, even
+     though the card itself is centred. */
+  .gate-card .msg, .gate-card #loginForm{text-align:left}
+  .gate-card .hint{margin-top:13px;line-height:1.55}
+  /* 436px is not two columns wide: username and password stack instead, and
+     the form's own Sign in matches the width of the button above it. */
+  .gate-card .row{flex-direction:column;gap:0}
+  .gate-card #loginForm button{width:100%}
+  .gate-foot{margin-top:20px;max-width:400px;text-align:center;font-size:12px;
+    color:var(--muted);line-height:1.5}
+
+  /* The password form is the way out when the button cannot help, so it is
+     present but quiet: one line under the button, not a second form. A real
+     <button> because it is a control — a bare <a> cannot be tabbed to. */
+  .alt{margin-top:18px;padding-top:15px;border-top:1px solid var(--line)}
+  .alt-toggle{display:inline-flex;align-items:center;gap:7px;background:none;
+    border:none;margin:0;padding:5px 9px;border-radius:8px;cursor:pointer;
+    color:var(--muted);font-size:12px;font-weight:600}
+  .alt-toggle:hover{background:var(--panel2);color:var(--text)}
+  .alt-toggle svg{transition:transform .18s;flex:0 0 auto}
+  .alt-toggle.open svg{transform:rotate(180deg)}
   code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:12px}
   /* A note about the plan: a count you can read at a glance, and the days
      themselves as chips rather than a comma-separated wall. */
@@ -452,12 +514,77 @@
   .wi-name b{color:var(--text);font-weight:600}
 </style>
 </head>
-<body>
+<body class="signed-out">
 <div class="wrap">
   <h1><span class="dot"></span> Jira Task Logging</h1>
   <p class="sub">Create daily sub-tasks, log the hours, and mark them Done — from your attendance sheet.</p>
 
-  <!-- STEP 1: LOGIN -->
+  <!-- THE SIGN-IN SCREEN — shown while `signed-out` is on <body>, which is
+       every moment before step 1 has someone to name. The controls live here
+       rather than in the card below, so there is only ever one of each. -->
+  <div class="gate" id="gate">
+    <div class="gate-card">
+      <div class="gate-mark" aria-hidden="true">
+        <svg width="28" height="28" viewBox="0 0 32 32">
+          <path fill="#fff" d="M16.6 1.3a1 1 0 0 0-1.4 0L1.3 15.3a1 1 0 0 0 0
+                1.4l14 14a1 1 0 0 0 1.4 0l5.1-5.1L12.1 16l9.7-9.6z"/>
+          <path fill="#fff" opacity=".6" d="M21.8 6.4l9 9a1 1 0 0 1 0 1.4l-9 9-4.9-4.8
+                4.9-4.9-4.9-4.9z"/>
+        </svg>
+      </div>
+      <h2 class="gate-title">Jira Task Logging</h2>
+      <p class="gate-sub">Create daily sub-tasks, log the hours, and mark them
+        Done — from your attendance sheet. Sign in to your Jira to start.</p>
+
+      <button class="sso-btn" id="btnSso" onclick="startSignIn()" autofocus>
+        <svg width="20" height="20" viewBox="0 0 32 32" style="margin-right:10px"
+             aria-hidden="true">
+          <path fill="#2684ff" d="M16.6 1.3a1 1 0 0 0-1.4 0L1.3 15.3a1 1 0 0 0 0
+                1.4l14 14a1 1 0 0 0 1.4 0l5.1-5.1L12.1 16l9.7-9.6z"/>
+          <path fill="#0052cc" opacity=".9" d="M21.8 6.4l9 9a1 1 0 0 1 0 1.4l-9 9-4.9-4.8
+                4.9-4.9-4.9-4.9z"/>
+        </svg>Sign in with Jira
+      </button>
+      <div class="msg" id="mSso" role="status" aria-live="polite"></div>
+      <div class="sso-actions">
+        <button class="ghost" id="btnSsoCancel" onclick="cancelSignIn()"
+                style="display:none">Cancel</button>
+        <button class="ghost" id="btnSsoWindow" onclick="startSignIn(true)"
+                style="display:none">Open the sign-in window</button>
+      </div>
+      <div class="hint" id="loginHint">A sign-in window opens the first time.
+        After that this button finds that session again on its own — nothing to
+        type, nothing opens.</div>
+
+      <div class="alt">
+        <button type="button" class="alt-toggle" id="altToggle"
+                aria-expanded="false" aria-controls="loginForm"
+                onclick="togglePasswordForm(event)">
+          <span id="altToggleText">Use a password or token instead</span>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="3" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </div>
+      <div id="loginForm" style="display:none">
+        <label>Jira URL<span class="req" title="Required">*</span></label>
+        <input id="baseUrl" value="https://tracking.i2cinc.com/">
+
+        <div class="row">
+          <div><label>Username <span class="muted">(blank if using a token)</span></label>
+            <input id="username" placeholder="awahab02" autocomplete="username"></div>
+          <div><label>Password / Personal Access Token<span class="req" title="Required">*</span></label>
+            <input id="password" type="password" autocomplete="current-password"
+                   onkeydown="if(event.key==='Enter') login()"></div>
+        </div>
+        <button id="btnLogin" onclick="login()">Sign in</button>
+      </div>
+    </div>
+    <div class="gate-foot">Nothing leaves this machine: your Jira, your
+      attendance and your password all stay here.</div>
+  </div>
+
+  <!-- STEP 1: LOGIN — once you are in, all this has to say is who you are. -->
   <div class="card" id="c-login">
     <h2><span class="step">1</span> Sign in <span class="pill" id="who"></span>
       <button type="button" id="btnSignOut" class="ghost signout" style="display:none"
@@ -466,38 +593,7 @@
              stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"
              ><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path
              d="M21 12H9"/></svg>Sign out</button></h2>
-    <div id="loginForm">
-      <label>Jira URL<span class="req" title="Required">*</span></label>
-      <input id="baseUrl" value="https://tracking.i2cinc.com/">
-
-      <div class="row">
-        <div><label>Username <span class="muted">(blank if using a token)</span></label>
-          <input id="username" placeholder="awahab02" autocomplete="username"></div>
-        <div><label>Password / Personal Access Token<span class="req" title="Required">*</span></label>
-          <input id="password" type="password" autocomplete="current-password"></div>
-      </div>
-      <button id="btnLogin" onclick="login()">Sign in</button>
-    </div>
     <div class="msg" id="mLogin"></div>
-
-    <div class="or" id="orDivider">— or —</div>
-
-    <!-- Microsoft SSO — handled end to end by the backend -->
-    <button class="ms-btn" id="btnMs" onclick="startMicrosoft()">
-      <svg width="18" height="18" viewBox="0 0 21 21" style="margin-right:8px">
-        <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
-        <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
-        <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
-        <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
-      </svg>Sign in with Microsoft
-    </button>
-    <div class="msg" id="mSso"></div>
-    <button class="ghost" id="btnMsCancel" onclick="cancelMicrosoft()"
-            style="display:none">Cancel</button>
-
-    <div class="hint" id="loginHint">Sign in once with your password (or a Personal Access Token).
-      It is kept in Windows Credential Manager, and after that the button above signs
-      you in on its own — nothing to type, nothing opens.</div>
   </div>
 
   <!-- STEP 2: SPRINT + ISSUE -->
@@ -732,67 +828,97 @@ async function post(url, body){
 
 async function login(){
   const btn=$("btnLogin"); btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Signing in…';
-  hide("mLogin");
+  hide("mLogin"); hide("mSso");
   const res = await post("/api/login", {
     base_url:$("baseUrl").value, username:$("username").value, password:$("password").value });
   btn.disabled=false; btn.textContent="Sign in";
-  if(!res.ok){ show("mLogin","err",res.error); return; }
+  // The failure belongs next to the button, at the top of the card: mLogin is
+  // in step 1, which nobody can see until this succeeds.
+  if(!res.ok){ show("mSso","err",res.error); return; }
   onLoggedIn(res.user);
   if(res.saved) show("mLogin","ok","Signed in as "+res.user+
-    " — password saved to "+res.saved+", so next time just press “Sign in with Microsoft”.");
+    " — password saved to "+res.saved+", so next time just press “Sign in with Jira”.");
 }
 
-// The backend opens the sign-in window, watches for the Jira session and
-// adopts it. This page just starts the job and follows its progress.
+// The password form is the fallback, not the front door: it stays folded away
+// until someone asks for it.
+function togglePasswordForm(ev){
+  if(ev) ev.preventDefault();
+  const form=$("loginForm"), opening = form.style.display==="none";
+  form.style.display = opening ? "block" : "none";
+  $("altToggleText").textContent = opening
+    ? "Hide the password form"
+    : "Use a password or token instead";
+  $("altToggle").classList.toggle("open", opening);
+  $("altToggle").setAttribute("aria-expanded", opening ? "true" : "false");
+  if(opening) $("password").focus();
+}
+
+// One click, and the backend does the rest: it looks for a session we can
+// reuse and, when there is none, opens a real sign-in window and watches for
+// the session that comes out of it. This page follows that job's progress.
+// The button's own markup is the label we put back, so the logo lives in one
+// place — the HTML above.
+const SSO_BTN_HTML = $("btnSso").innerHTML;
 let SSO_TIMER = null;
 
-async function startMicrosoft(interactive){
-  const btn=$("btnMs"); btn.disabled=true;
-  btn.innerHTML='<span class="spinner"></span>Signing in with Microsoft…';
-  $("btnMsCancel").style.display="inline-block";
+async function startSignIn(openWindow){
+  const btn=$("btnSso"); btn.disabled=true;
+  btn.innerHTML='<span class="spinner"></span>'+
+    (openWindow ? "Opening the sign-in window…" : "Signing in…");
+  $("btnSsoCancel").style.display="inline-block";
+  $("btnSsoWindow").style.display="none";
   hide("mLogin"); show("mSso","info",'<span class="spinner"></span>Starting…');
   const res = await post("/api/sso/start",
-    {base_url:$("baseUrl").value, interactive:!!interactive});
-  if(!res.ok){ ssoFailed(res.error); return; }
-  SSO_TIMER = setInterval(pollSso, 1200);
+    {base_url:$("baseUrl").value, interactive:!!openWindow});
+  if(!res.ok){ signInFailed(res.error); return; }
+  SSO_TIMER = setInterval(pollSso, 1000);
   pollSso();
 }
 
 async function pollSso(){
-  const s = await (await fetch("/api/sso/status")).json();
-  if(s.state==="working"){ show("mSso","info",'<span class="spinner"></span>'+s.message); return; }
+  let s;
+  // A dropped poll is not a failure: the next tick asks again. Only the
+  // backend's own answer ends the wait.
+  try{ s = await (await fetch("/api/sso/status")).json(); }catch(e){ return; }
+  if(s.state==="working"){
+    show("mSso","info",'<span class="spinner"></span>'+s.message);
+    // While the window is up, the button says what is being waited for —
+    // otherwise "Signing in…" sits there while the ball is in your court.
+    if(s.stage==="window"){
+      $("btnSso").innerHTML =
+        '<span class="spinner"></span>Waiting for you to sign in…';
+    }
+    return;
+  }
   stopSsoPolling();
   if(s.state==="done"){ hide("mSso"); onLoggedIn(s.user); }
-  else if(s.state==="error"){ ssoFailed(s.message); }
-  else { hide("mSso"); resetMsButton(); }
+  else if(s.state==="error"){ signInFailed(s.message, s.can_open_window); }
+  else { hide("mSso"); resetSignInButton(); }
 }
 
-async function cancelMicrosoft(){
+async function cancelSignIn(){
   await fetch("/api/sso/cancel", {method:"POST"});
-  stopSsoPolling(); hide("mSso"); resetMsButton();
+  stopSsoPolling(); hide("mSso"); resetSignInButton();
 }
 
 function stopSsoPolling(){
   if(SSO_TIMER){ clearInterval(SSO_TIMER); SSO_TIMER=null; }
-  resetMsButton();
+  resetSignInButton();
 }
 
-function resetMsButton(){
-  const btn=$("btnMs"); btn.disabled=false;
-  btn.innerHTML='<svg width="18" height="18" viewBox="0 0 21 21" style="margin-right:8px">'+
-    '<rect x="1" y="1" width="9" height="9" fill="#f25022"/>'+
-    '<rect x="11" y="1" width="9" height="9" fill="#7fba00"/>'+
-    '<rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>'+
-    '<rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>Sign in with Microsoft';
-  $("btnMsCancel").style.display="none";
+function resetSignInButton(){
+  const btn=$("btnSso"); btn.disabled=false; btn.innerHTML=SSO_BTN_HTML;
+  $("btnSsoCancel").style.display="none";
 }
 
-function ssoFailed(msg){
+function signInFailed(msg, canOpenWindow){
   stopSsoPolling();
   if(LOGGED_IN){ hide("mSso"); return; }   // already signed in another way — ignore
-  // Everything runs in the backend now, so the only thing left to try is the
-  // username + password above — which is exactly what the message says.
   show("mSso","err",msg);
+  // Two ways forward, and the message names both: open the window again, or
+  // fall back to a password. Only offer the window when it can actually help.
+  $("btnSsoWindow").style.display = canOpenWindow ? "inline-block" : "none";
 }
 
 
@@ -800,14 +926,11 @@ function onLoggedIn(user){
   LOGGED_IN = true;
   stopSsoPolling();
   hide("mSso");
-  // Signed in: the card collapses to just the green confirmation — the form,
-  // the Microsoft button and the tip have nothing left to offer.
-  ["loginForm","loginHint","orDivider","btnMs","btnMsCancel"].forEach(id=>{
-    const el=$(id); if(el) el.style.display="none";
-  });
+  // Signed in: the sign-in screen has nothing left to offer, so the whole of
+  // it goes and the steps take its place. One class does both.
+  document.body.classList.remove("signed-out");
   $("who").textContent = user;
   $("btnSignOut").style.display = "inline-block";
-  show("mLogin","ok","Signed in as "+user);
   markDone("c-login"); enable("c-sprint");
 }
 
@@ -2685,7 +2808,9 @@ async function restoreSession(){
   // page that looks like nothing happened.
   if(/[?&]signedout=1/.test(location.search)){
     history.replaceState(null, "", location.pathname);
-    show("mLogin", "ok", "Signed out. Sign in again to start a new run.");
+    // Under the button, where the eye already is — not at the foot of the card
+    // below the folded-away password form.
+    show("mSso", "ok", "Signed out. Sign in again to start a new run.");
   }
   try{
     const s = await (await fetch("/api/session")).json();

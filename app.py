@@ -10,9 +10,10 @@ logic from jira_logging_utility.py, so behaviour is identical to the CLI.
     python app.py
     -> open http://127.0.0.1:5000
 
-"Sign in with Microsoft" is fully automatic: the backend drives the browser
-sign-in and picks the Jira session up by itself (see sso_login.py). Selenium is
-what makes that work; without it, only username/password/PAT sign-in is available.
+Signing in is one button. "Sign in with Jira" reuses a session if there is one
+to reuse and otherwise opens a real sign-in window, which closes itself the
+moment Jira hands out a session (see sso_login.py). Selenium is what opens that
+window; without it, only username/password/PAT sign-in is available.
 """
 
 from __future__ import annotations
@@ -226,7 +227,8 @@ def api_login():
     except Exception as exc:  # noqa: BLE001
         return jsonify(ok=False, error=f"Unexpected error: {exc}"), 500
     STATE.update(client=client, contexts={}, projects={}, user=who)
-    # Remember a working password/PAT so the one-click button needs no typing.
+    # Remember a working password/PAT: with it, the one-click button signs in
+    # from a single REST call and never has to open a window at all.
     saved_to = ""
     if method != "cookie" and data.get("remember", True):
         saved_to = jira_credentials.save(base_url, username, password)
@@ -235,7 +237,14 @@ def api_login():
 
 @app.post("/api/sso/start")
 def api_sso_start():
-    """Begin the automatic Microsoft sign-in; the UI polls /api/sso/status."""
+    """
+    Begin a sign-in; the UI polls /api/sso/status until it lands.
+
+    Normally it looks for a session already worth having and only opens the
+    sign-in window when there is none. `interactive` skips the looking and
+    opens the window straight away — which is what the UI offers after a
+    failure, and the only way past a password prompt.
+    """
     data = _body()
     base_url = (data.get("base_url") or "https://tracking.i2cinc.com/").strip()
     verify_ssl = not data.get("no_verify_ssl", False)

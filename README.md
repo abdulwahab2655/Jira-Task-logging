@@ -93,7 +93,7 @@ plan and creates nothing.
 | | |
 | --- | --- |
 | **Python 3.10+** | `python --version` |
-| **Microsoft Edge or Chrome** | only for the automatic sign-in and the attendance fetch |
+| **Microsoft Edge or Chrome** | for the sign-in window and the attendance fetch |
 | **Network** | reachable Jira (VPN if your Jira needs one) |
 
 ### 1.2 Install
@@ -117,7 +117,7 @@ What each package is for, so you can leave out what you don't want:
 | `requests` | every Jira call | nothing works |
 | `openpyxl` | reading an `.xlsx` attendance export | export as `.csv` instead |
 | `flask` | the web page | command line only |
-| `selenium` | driving a headless browser: the attendance fetch and Microsoft sign-in | sign in with a password/PAT and drop the export on the page |
+| `selenium` | the sign-in window, and the headless browser the attendance fetch runs in | sign in with a password/PAT and drop the export on the page |
 | `keyring` | keeping your password in Windows Credential Manager | falls back to a base64 file — see 1.4 |
 | `browser_cookie3` | borrowing a Jira session from a browser you are already signed in to | one less sign-in shortcut |
 | `tzdata` | resolving `Asia/Karachi` and friends on Windows | falls back to this machine's timezone, which is normally the same answer |
@@ -131,7 +131,8 @@ Defaults live at the top of each module — change them there, or pass a flag.
 | Jira base URL | the **Jira URL** box on the page, or `--base-url` | `https://tracking.i2cinc.com/` |
 | Attendance portal | `attendance_portal.py` › `PORTAL_URL` | `https://attendance.i2cinc.com/employee/attendance` |
 | Attendance API | `attendance_portal.py` › `API_BASE` | `https://attendance-server-pilot.i2cinc.com/api/v1` |
-| Jiras with no Microsoft SSO | `sso_login.py` › `PASSWORD_ONLY_HOSTS` | `("tracking.i2cinc.com",)` |
+| Where the sign-in window opens | `sso_login.py` › `LOGIN_PATH` | `/login.jsp?os_destination=…` |
+| How long that window waits for you | `sso_login.py` › `WINDOW_TIMEOUT` | `300` seconds |
 | Web UI port | `app.py` › `app.run(... port=5000)` | `5000` |
 
 ### 1.4 Where your sign-in is kept
@@ -171,8 +172,9 @@ python app.py          # then open http://127.0.0.1:5000
 
 Do the first one small and see the plan before it writes anything:
 
-1. Sign in with your username and password (or a PAT with the username blank).
-   Let it save; from then on **Sign in with Microsoft** needs no typing.
+1. Press **Sign in with Jira**. A sign-in window opens; sign in there as you
+   normally would and it closes itself. From then on the same button finds
+   that session again with nothing on screen.
 2. Enter your **ST** and **release** — e.g. `ST12` and `26.08`.
 3. Let the attendance fetch run. First time it is ~20s, after that ~2s.
 4. Narrow the dates to two or three days.
@@ -192,19 +194,38 @@ python jira_logging_utility.py --dry-run
 
 ### Step 1 — Sign in
 
-Two routes to the same place:
+One button: **Sign in with Jira** — the same shape as the attendance
+portal's. Behind it the backend tries, in order:
 
-- **Username + password / PAT.** Straight through the REST API, no browser. On
-  Jira Server, if password login is blocked, create a Personal Access Token,
-  leave the username blank, and paste the token as the password.
-- **Sign in with Microsoft.** Everything happens in the backend, in this order:
-  the password you saved earlier (one REST call, effectively instant); a live
-  Jira session from a browser on this machine (`browser_cookie3`); a headless
-  SSO walk on the app's own profile. It gives up in about 10s rather than
-  hanging, and says which of those failed.
+1. **A password or PAT you saved earlier** — one REST call, effectively
+   instant, nothing on screen.
+2. **A browser on this machine** that already holds a live Jira session; its
+   cookies are borrowed (`browser_cookie3`).
+3. **This app's own browser profile**, headless. A sign-in window leaves its
+   cookies there, so this is the step that makes every run after the first one
+   a single click and no window. Skipped on a first run, when there is no
+   profile to search.
+4. **The sign-in window.** A real browser window, shaped like a sign-in popup,
+   opens on Jira's login page with your username already filled in. Sign in
+   however that page asks — the stock Atlassian form, an identity provider, a
+   second factor — and the window closes by itself the moment Jira hands out a
+   session. Closing it yourself works too: the session it established is in the
+   profile either way, and the app looks there before giving up.
 
-`tracking.i2cinc.com` has no Microsoft SSO — its login page is the stock
-Atlassian form — so there the button is really "use my saved password".
+Nothing on that page is automated: the app watches for the session that comes
+out of it, and that is all. Which is why it does not matter what your Jira's
+login page happens to be.
+
+Signed out, the sign-in has the window to itself — one centred card, the
+button, and nothing else: the steps below it cannot do anything until it
+succeeds, so they are not drawn at all. Signing in swaps them in and collapses
+step 1 to your name and **Sign out**.
+
+**If it can't sign you in**, the message says so and offers the window again.
+Under the button, *Use a password or token instead* unfolds a form — username +
+password, or a Personal Access Token with the username left blank, which is
+what Jira Server wants when password login is disabled. A password entered
+there is saved, and turns every later sign-in into step 1 above.
 
 A page reload keeps you signed in; **Start over** clears the session.
 
@@ -572,7 +593,7 @@ python jira_logging_utility.py --attendance-file attendance.xlsx `
 | `app.py` | The web UI's backend — a thin Flask layer over that engine |
 | `static/index.html` | The whole page: markup, styles and script in one file |
 | `attendance_portal.py` | Fetches attendance from the portal's API |
-| `sso_login.py` | Automatic sign-in: saved password → browser cookies → headless SSO |
+| `sso_login.py` | Signing in: saved password → browser cookies → our own profile → the sign-in window |
 | `jira_credentials.py` | Keeps your sign-in in Windows Credential Manager |
 
 The rules live in exactly one place. `classify_day()` decides what a day is
@@ -594,8 +615,12 @@ The backend endpoints, if you want to script against it: `/api/login`,
   Access Token**, leave the username blank, and paste the token as the password.
 - **"Jira is asking for a CAPTCHA"** — too many failed logins locked the form.
   Sign in once in a browser to clear it, or use a PAT.
-- **"Nothing saved yet for …"** on the Microsoft button — sign in once with your
-  password so it can be saved; after that the button needs no typing.
+- **"That window closed before Jira signed you in"** — the window was shut
+  before Jira handed out a session. Press the button again, or use *Use a
+  password or token instead* below it.
+- **The sign-in window never opens** — that window is Selenium's job:
+  `pip install selenium`, and have Edge or Chrome installed. The password form
+  under the button needs neither.
 - **"Sprint not found"** — usually a misspelt name. If your Jira has the sprint
   picker disabled, pass the board id (`--board <id>`, from the board URL
   `…RapidBoard.jspa?rapidView=<id>`).
