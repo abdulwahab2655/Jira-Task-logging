@@ -586,7 +586,8 @@ class JiraClient:
 
     def _issues_by_jql(self, sprint: str) -> list[tuple]:
         """Last-resort lookup by sprint name through JQL. [] if it doesn't work."""
-        jql = f'sprint = "{sprint}" AND issuetype not in subTaskIssueTypes() ORDER BY key ASC'
+        jql = (f'sprint = "{_jql_text(sprint)}" AND '
+               'issuetype not in subTaskIssueTypes() ORDER BY key ASC')
         r = self.session.get(
             f"{self.api}/search",
             params={"jql": jql, "fields": "summary,project", "maxResults": 100},
@@ -1037,6 +1038,18 @@ def _zone(name: str):
         return ZoneInfo(str(name))
     except Exception:  # noqa: BLE001 - no database, or a name it doesn't know
         return None
+
+
+def _jql_text(value: str) -> str:
+    """
+    A value safe to sit inside a quoted JQL string.
+
+    Sprint names are typed by hand, and one containing a quote used to end the
+    string early: the query became malformed, Jira answered 400, and the app
+    reported "no issues found" — the right answer to the wrong question. Dates
+    reach JQL through date.fromisoformat(), so they need none of this.
+    """
+    return str(value or "").replace("\\", "\\\\").replace('"', '\\"')
 
 
 def shift_date(iso: str, days: int) -> str:

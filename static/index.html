@@ -127,6 +127,10 @@
   .msg.ok{background:rgba(34,197,94,.12);color:#86efac;border:1px solid rgba(34,197,94,.3)}
   .msg.err{background:rgba(239,68,68,.12);color:#fca5a5;border:1px solid rgba(239,68,68,.3)}
   .msg.info{background:rgba(59,130,246,.12);color:#93c5fd;border:1px solid rgba(59,130,246,.3)}
+  /* Neither good news nor bad: something happened that you asked for. Green
+     would claim an achievement and red would claim a fault, and on the
+     sign-in screen either one shouts over the only button there is. */
+  .msg.note{background:var(--panel2);color:var(--muted);border:1px solid var(--line)}
   .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;
     background:var(--panel2);border:1px solid var(--line);color:var(--muted);margin-left:8px}
   /* An empty pill is still a bordered box: the one that holds your name sits
@@ -193,7 +197,7 @@
      the logo beside the words, and nothing else competing with it. */
   .sso-btn{display:flex;align-items:center;justify-content:center;width:100%;
     background:#fff;color:#172b4d;border:1px solid #cfd6e4;border-radius:999px;
-    padding:13px;font-size:14.5px;font-weight:600;cursor:pointer;margin-top:4px;
+    padding:14px;font-size:14.5px;font-weight:600;cursor:pointer;margin:0;
     transition:.15s;box-shadow:0 1px 2px rgba(0,0,0,.25)}
   .sso-btn:hover:not(:disabled){background:#f4f6fb;border-color:#a9b4c9}
   .sso-btn:disabled{opacity:.72;cursor:progress}
@@ -201,7 +205,7 @@
      reverse, or it disappears into the button. */
   .sso-btn .spinner{border-color:rgba(23,43,77,.25);border-top-color:#172b4d}
   .sso-btn:active:not(:disabled){transform:translateY(1px)}
-  .sso-btn:focus-visible{outline:3px solid rgba(59,130,246,.5);outline-offset:3px}
+  .sso-btn:focus-visible{outline:2px solid rgba(59,130,246,.55);outline-offset:2px}
   .sso-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
 
   /* ---- The sign-in screen ------------------------------------------------
@@ -220,36 +224,30 @@
   body.signed-out .wrap{padding-bottom:28px}
   .gate{flex-direction:column;align-items:center;justify-content:center;
     min-height:calc(100vh - 56px)}
+  /* One rhythm down the card: the mark, name and line about the app are one
+     group with small gaps between them, then the widest gap in the card
+     separates that group from the thing you press, and the note under the
+     button stays close to the button it describes. */
   .gate-card{position:relative;width:100%;max-width:436px;background:var(--panel);
-    border:1px solid var(--line);border-radius:18px;padding:34px 32px 26px;
+    border:1px solid var(--line);border-radius:18px;padding:36px 32px 32px;
     box-shadow:0 20px 44px rgba(0,0,0,.38);text-align:center}
-  .gate-mark{width:54px;height:54px;margin:0 auto 18px;border-radius:16px;
+  .gate-mark{width:56px;height:56px;margin:0 auto 16px;border-radius:17px;
     display:flex;align-items:center;justify-content:center;
     background:linear-gradient(145deg,#1d4ed8,#3b82f6);
-    box-shadow:0 8px 20px rgba(37,99,235,.4)}
-  .gate-title{font-size:20px;font-weight:700;margin:0 0 7px;letter-spacing:-.2px}
-  .gate-sub{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 24px}
-  /* The messages and the fallback form read left-to-right like text, even
-     though the card itself is centred. */
-  .gate-card .msg, .gate-card #loginForm{text-align:left}
-  .gate-card .hint{margin-top:13px;line-height:1.55}
-  /* 436px is not two columns wide: username and password stack instead, and
-     the form's own Sign in matches the width of the button above it. */
-  .gate-card .row{flex-direction:column;gap:0}
-  .gate-card #loginForm button{width:100%}
-  .gate-foot{margin-top:20px;max-width:400px;text-align:center;font-size:12px;
-    color:var(--muted);line-height:1.5}
+    box-shadow:0 6px 16px rgba(37,99,235,.32)}
+  .gate-title{font-size:20px;font-weight:700;margin:0 0 10px;letter-spacing:-.2px}
+  /* Held in from the card's edges: a shorter line is easier to read centred,
+     and the ragged edges stop fighting the card's own. */
+  .gate-sub{color:var(--muted);font-size:13px;line-height:1.55;
+    margin:0 auto 30px;max-width:340px}
+  /* A message reads left-to-right like text, even though the card itself is
+     centred. */
+  .gate-card .msg{text-align:left;margin-top:14px}
+  .gate-card .hint{margin:16px auto 0;max-width:352px;font-size:12px;
+    line-height:1.6}
+  .gate-foot{margin:26px auto 0;max-width:364px;text-align:center;
+    font-size:11.5px;color:var(--muted);line-height:1.55}
 
-  /* The password form is the way out when the button cannot help, so it is
-     present but quiet: one line under the button, not a second form. A real
-     <button> because it is a control — a bare <a> cannot be tabbed to. */
-  .alt{margin-top:18px;padding-top:15px;border-top:1px solid var(--line)}
-  .alt-toggle{display:inline-flex;align-items:center;gap:7px;background:none;
-    border:none;margin:0;padding:5px 9px;border-radius:8px;cursor:pointer;
-    color:var(--muted);font-size:12px;font-weight:600}
-  .alt-toggle:hover{background:var(--panel2);color:var(--text)}
-  .alt-toggle svg{transition:transform .18s;flex:0 0 auto}
-  .alt-toggle.open svg{transform:rotate(180deg)}
   code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:12px}
   /* A note about the plan: a count you can read at a glance, and the days
      themselves as chips rather than a comma-separated wall. */
@@ -283,6 +281,9 @@
   .planbar-r button{margin-top:0}
 
   .grps{display:grid;gap:10px}
+  /* Before the run there is one more column on the right, for discarding. */
+  .grp-x .st-head,.grp-x .st{grid-template-columns:20px 68px minmax(0,1fr)
+    minmax(0,196px) minmax(0,1.15fr) 26px}
   .grp{background:var(--panel2);border:1px solid var(--line);border-radius:12px;
     padding:11px 12px}
   .grp.leave{background:rgba(168,85,247,.07);border-color:rgba(168,85,247,.28)}
@@ -320,6 +321,17 @@
     text-overflow:ellipsis;white-space:nowrap}
   .st-r{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:11px}
   .st-r .key{color:#93c5fd;font-weight:600}
+  /* Every Jira key is the issue itself: same colour, underlined only when you
+     are about to click it. */
+  a.key{text-decoration:none;cursor:pointer}
+  a.key:hover{text-decoration:underline}
+  /* Discard: a leave sub-task you would rather not log. It sits at the end of
+     its row, quiet until the pointer is near it. */
+  .st-kill{background:none;border:none;margin:0;padding:0;width:22px;height:22px;
+    border-radius:7px;color:#64748b;cursor:pointer;display:flex;
+    align-items:center;justify-content:center;opacity:.5;transition:.15s}
+  .st:hover .st-kill{opacity:1}
+  .st-kill:hover{background:rgba(248,113,113,.16);color:#fca5a5}
   /* The days, and anything else worth a second line, folded away by default. */
   .st-d{grid-column:1 / -1;display:none;padding:7px 0 2px;border-top:1px solid var(--line);
     margin-top:6px}
@@ -338,8 +350,9 @@
   .st input::placeholder{font-style:italic}
   @media (max-width:760px){
     .st-head{display:none}
-    .st{grid-template-columns:20px 68px minmax(0,1fr)}
+    .st,.grp-x .st{grid-template-columns:20px 68px minmax(0,1fr)}
     .st > .st-r,.st > .card2-in,.st > .st-n{grid-column:2 / -1}
+    .st-kill{display:none}   /* no room for it; widen the window to discard */
   }
 
   /* ---- step 4: work items ---------------------------------------------- */
@@ -357,7 +370,7 @@
     align-items:start;margin-top:12px}
   @media (max-width:880px){ .wi{grid-template-columns:1fr} }
   .wi-panel{background:var(--panel2);border:1px solid var(--line);border-radius:12px;
-    padding:12px 12px;min-width:0}
+    padding:12px 12px;min-width:0;container-type:inline-size}
   .wi-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
   .wi-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
   .wi-dow{font-size:9px;font-weight:700;color:var(--muted);text-align:center;padding:2px 0;
@@ -435,7 +448,7 @@
   .wi-legend i{width:8px;height:8px;border-radius:3px;display:inline-block;
     margin-right:4px;flex:0 0 auto}
   .wi-row{background:var(--panel);border:1px solid var(--line);border-radius:10px;
-    padding:11px 12px;margin-bottom:8px}
+    padding:12px;margin-bottom:8px}
   .wi-row.extra{border-color:rgba(59,130,246,.45);background:rgba(59,130,246,.07)}
   /* minmax(0,...) matters: a plain 1fr grows to its content, so one long
      ticket summary would squeeze the Task picker down to nothing. */
@@ -444,25 +457,45 @@
   .wi-ed-head .strip-title{font-size:14px}
   /* Ticket and Task share the first line; the title, which wants the room,
      gets the second. */
-  .wi-cells{display:grid;gap:9px;align-items:end;
-    grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) 84px 32px}
-  /* The pickers carry real text ("Select a ticket", a Task name); the hours
-     box carries four characters. Tightening the padding in here keeps the
-     labels readable instead of ellipsised down to "Sel...". */
-  .wi-cells .picker-btn{padding:9px 10px;font-size:13px;gap:6px}
+  /* One line, and the room goes where the words are. The hours box holds
+     '8h 30m' and the ticket shows as 'ST12-5779', so both are near-fixed; the
+     Task is the one carrying a phrase, so it takes what is left. The ticket's
+     92px floor is what its key needs — below that the fraction stops shrinking
+     it. Row-gap is larger than column-gap: the lines want air, the columns
+     want the pixels. */
+  .wi-cells{display:grid;gap:10px 5px;align-items:end;
+    grid-template-columns:minmax(106px,0.7fr) minmax(0,1.3fr) 54px 26px}
+  /* Tighter than the pickers elsewhere on the page: every pixel of padding
+     here is a pixel off the end of a Task name. */
+  .wi-cells .picker-btn{padding:8px;font-size:13px;gap:3px}
+  /* A smaller chevron in here for the same reason as the padding: it is two
+     pixels the Task name gets to keep. */
+  .wi-cells .picker-chev{width:12px;height:12px}
+  .wi-cells label{font-size:11.5px;margin-bottom:4px}
+  /* The title's box matched the page's inputs and so stood taller than the
+     pickers beside it; in a row of controls they should read as one set. */
+  .wi-cells .wi-title input{padding:9px 11px;font-size:13px}
   .wi-cells > .wi-title{grid-column:1 / -1}
-  @media (max-width:760px){
-    .wi-cells{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 40px}
-    .wi-cells > .wi-hrs-cell{grid-column:1 / -1}
-  }
-  @media (max-width:520px){
-    .wi-cells{grid-template-columns:minmax(0,1fr) 40px}
-    .wi-cells > div:nth-child(2){grid-column:1}
+  /* The row measures its container, not the window — with the calendar
+     beside it this panel is ~380px however wide the screen is, and with the
+     calendar above it ~720px however narrow, so viewport breakpoints fired
+     exactly backwards here.
+
+     The three columns hold down to about 300px. Below that no arrangement of
+     them is honest, so the Task takes a line of its own — a phone, where the
+     card itself is that narrow, rather than anything a desktop will see. */
+  @container (max-width:300px){
+    .wi-cells{grid-template-columns:minmax(0,1fr) 54px 26px}
+    .wi-cells > div:nth-child(1){grid-column:1;grid-row:1}
+    .wi-cells > div:nth-child(2){grid-column:1 / -1;grid-row:2}
+    .wi-cells > .wi-hrs-cell{grid-column:2;grid-row:1}
+    .wi-cells > .wi-x{grid-column:3;grid-row:1}
+    .wi-cells > .wi-title{grid-column:1 / -1;grid-row:3}
   }
   /* Optional per-row hours. Blank means "the share of the day", which is what
      it has always meant; a number means exactly that much and no more. */
   .wi-cells .wi-rowhrs{width:100%;text-align:center;font-weight:600;
-    padding:9px 6px;font-size:13px}
+    padding:9px 3px;font-size:12.5px}
   .wi-cells .wi-rowhrs::placeholder{font-weight:500;color:#5b6b82}
   .wi-cells .wi-rowhrs.bad{border-color:rgba(239,68,68,.55);
     box-shadow:0 0 0 3px rgba(239,68,68,.12)}
@@ -476,8 +509,10 @@
     border-radius:10px;background:var(--panel)}
   .wi-empty-t{font-size:13.5px;font-weight:600;margin-bottom:4px}
   .wi-empty-d{font-size:12px;color:var(--muted);line-height:1.5}
-  .wi-x{background:none;border:1px solid var(--line);color:var(--muted);border-radius:8px;
-    padding:10px 11px;margin:0;font-size:12px;font-weight:700;line-height:1}
+  .wi-x{background:none;border:1px solid var(--line);color:var(--muted);
+    border-radius:8px;padding:0;margin:0;width:100%;height:35px;display:flex;
+    align-items:center;justify-content:center;font-size:11px;font-weight:700;
+    line-height:1}
   .wi-x:hover{background:rgba(239,68,68,.14);border-color:rgba(239,68,68,.45);color:#fca5a5}
   .wi-split{display:flex;align-items:center;gap:11px;margin-top:10px}
   .wi-split input[type=range]{flex:1;padding:0;margin:0;border:none;background:none;
@@ -552,33 +587,10 @@
         <button class="ghost" id="btnSsoWindow" onclick="startSignIn(true)"
                 style="display:none">Open the sign-in window</button>
       </div>
-      <div class="hint" id="loginHint">A sign-in window opens the first time.
-        After that this button finds that session again on its own — nothing to
-        type, nothing opens.</div>
-
-      <div class="alt">
-        <button type="button" class="alt-toggle" id="altToggle"
-                aria-expanded="false" aria-controls="loginForm"
-                onclick="togglePasswordForm(event)">
-          <span id="altToggleText">Use a password or token instead</span>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" stroke-width="3" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-        </button>
-      </div>
-      <div id="loginForm" style="display:none">
-        <label>Jira URL<span class="req" title="Required">*</span></label>
-        <input id="baseUrl" value="https://tracking.i2cinc.com/">
-
-        <div class="row">
-          <div><label>Username <span class="muted">(blank if using a token)</span></label>
-            <input id="username" placeholder="awahab02" autocomplete="username"></div>
-          <div><label>Password / Personal Access Token<span class="req" title="Required">*</span></label>
-            <input id="password" type="password" autocomplete="current-password"
-                   onkeydown="if(event.key==='Enter') login()"></div>
-        </div>
-        <button id="btnLogin" onclick="login()">Sign in</button>
-      </div>
+      <div class="hint" id="loginHint">Jira sign-in opens with saved credentials, closes automatically after login, and remembers the session for future runs.</div>
+      <!-- Which Jira, for every call the page makes. Nothing on the screen
+           needs to ask, so it does not: change it here or with --base-url. -->
+      <input type="hidden" id="baseUrl" value="https://tracking.i2cinc.com/">
     </div>
     <div class="gate-foot">Nothing leaves this machine: your Jira, your
       attendance and your password all stay here.</div>
@@ -772,7 +784,9 @@
     <h2><span class="step">5</span> Review &amp; run</h2>
     <div id="planWrap"></div>
     <button id="btnRun" onclick="run()" style="background:var(--ok)">Create &amp; log all</button>
-    <button class="ghost" onclick="startOver()">Start over</button>
+    <!-- Hidden once the run is over: from then on the pair in step 6 is the
+         one that matters, and two Start overs on one screen is one too many. -->
+    <button class="ghost" id="btnOver5" onclick="startOver()">Start over</button>
     <div class="msg" id="mRun"></div>
   </div>
 
@@ -826,32 +840,11 @@ async function post(url, body){
   return r.json();
 }
 
-async function login(){
-  const btn=$("btnLogin"); btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Signing in…';
-  hide("mLogin"); hide("mSso");
-  const res = await post("/api/login", {
-    base_url:$("baseUrl").value, username:$("username").value, password:$("password").value });
-  btn.disabled=false; btn.textContent="Sign in";
-  // The failure belongs next to the button, at the top of the card: mLogin is
-  // in step 1, which nobody can see until this succeeds.
-  if(!res.ok){ show("mSso","err",res.error); return; }
-  onLoggedIn(res.user);
-  if(res.saved) show("mLogin","ok","Signed in as "+res.user+
-    " — password saved to "+res.saved+", so next time just press “Sign in with Jira”.");
-}
-
-// The password form is the fallback, not the front door: it stays folded away
-// until someone asks for it.
-function togglePasswordForm(ev){
-  if(ev) ev.preventDefault();
-  const form=$("loginForm"), opening = form.style.display==="none";
-  form.style.display = opening ? "block" : "none";
-  $("altToggleText").textContent = opening
-    ? "Hide the password form"
-    : "Use a password or token instead";
-  $("altToggle").classList.toggle("open", opening);
-  $("altToggle").setAttribute("aria-expanded", opening ? "true" : "false");
-  if(opening) $("password").focus();
+// Which Jira we are talking to — the one place that reads it, so the links
+// below and every request agree.
+function jiraBase(){ return ($("baseUrl").value || "").replace(/\/+$/, ""); }
+function jiraLink(key){
+  return jiraBase() + "/browse/" + encodeURIComponent(key);
 }
 
 // One click, and the backend does the rest: it looks for a session we can
@@ -892,7 +885,13 @@ async function pollSso(){
     return;
   }
   stopSsoPolling();
-  if(s.state==="done"){ hide("mSso"); onLoggedIn(s.user); }
+  if(s.state==="done"){
+    hide("mSso"); onLoggedIn(s.user);
+    // Only worth saying when there is news: a sign-in that has just been
+    // remembered is why the next one will open nothing.
+    if(s.saved) show("mLogin","ok","Signed in as "+s.user+" — your Jira sign-in "+
+      "is saved to "+s.saved+", so next time is instant and nothing opens.");
+  }
   else if(s.state==="error"){ signInFailed(s.message, s.can_open_window); }
   else { hide("mSso"); resetSignInButton(); }
 }
@@ -1350,9 +1349,13 @@ const CHEV = '<svg class="picker-chev" width="14" height="14" viewBox="0 0 24 24
   '<path d="M6 9l6 6 6-6"/></svg>';
 const SPLIT_COLORS = ["var(--accent)", "var(--ok)", "var(--leave)", "var(--warn)"];
 
+// Everything from Jira goes through here before it reaches innerHTML: ticket
+// summaries and Task names are typed by other people. The apostrophe is in the
+// list not because anything single-quotes an attribute today, but so that the
+// next line of markup that does cannot become an injection.
 function esc(t){
-  return String(t == null ? "" : t).replace(/[&<>"]/g,
-    c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  return String(t == null ? "" : t).replace(/[&<>"']/g,
+    c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 function fmtDay(iso){
   return new Date(iso + "T00:00:00")
@@ -1787,7 +1790,7 @@ function fillIssueSelect(r){
   const sel = $("ri-" + r.id);
   if(!sel) return;
   sel.innerHTML = "";
-  const ph = new Option("Select a ticket", "");
+  const ph = new Option("Select\u2026", "");
   ph.disabled = true; ph.selected = true;
   sel.appendChild(ph);
   ISSUES.forEach(i => sel.appendChild(new Option(i.key + " — " + i.summary, i.key)));
@@ -2238,6 +2241,9 @@ function toggleNote(id, btn){
 const CARET = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" ' +
   'stroke="currentColor" stroke-width="2.4" stroke-linecap="round">' +
   '<path d="M9 6l6 6-6 6"/></svg>';
+const KILL = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" ' +
+  'stroke="currentColor" stroke-width="2.6" stroke-linecap="round">' +
+  '<path d="M18 6L6 18M6 6l12 12"/></svg>';
 
 function renderPlan(){
   const work = PLAN.filter(e => e.kind === "work");
@@ -2312,10 +2318,16 @@ function planGroups(){
     const mins = g.items.reduce((n, e) => n + durationMinutes(e.logged), 0);
     const leave = g.kind === "leave";
     const bulk = g.items.length > 1 && !RESULTS.length;
-    return `<div class="grp${leave ? " leave" : ""}">
+    // Leave is routed here rather than chosen, so discarding it is the only
+    // way to say "not this one" — and only before anything has been created.
+    const kill = leave && !RESULTS.length;
+    return `<div class="grp${leave ? " leave" : ""}${kill ? " grp-x" : ""}">
         <div class="grp-top">
           <div class="grp-id">
-            <span class="key">${esc(g.parent || "")}</span>
+            ${g.parent ? `<a class="key" href="${jiraLink(g.parent)}"
+                 target="_blank" rel="noopener"
+                 title="Open ${esc(g.parent)} in Jira">${esc(g.parent)}</a>`
+              : `<span class="key"></span>`}
             <span class="sum">${esc(leave ? "leave and public holidays"
                                           : issueSummary(g.parent))}</span>
           </div>
@@ -2331,16 +2343,17 @@ function planGroups(){
           </div>
         </div>
         <div class="st-head"><span></span><span>hours</span><span>which days</span>
-          <span>${RESULTS.length ? "result" : "title"}</span><span>name in Jira</span></div>
+          <span>${RESULTS.length ? "result" : "title"}</span><span>name in Jira</span>
+          ${kill ? "<span></span>" : ""}</div>
         <div class="sts">${g.items.map((e, i) =>
-          subtaskRow(e, i, g.items.length)).join("")}</div>
+          subtaskRow(e, i, g.items.length, kill)).join("")}</div>
       </div>`;
   }).join("");
 }
 
 // One sub-task, one line: what it is worth, which days it holds, its title and
 // the name Jira will get. The days themselves fold out underneath.
-function subtaskRow(e, i, n){
+function subtaskRow(e, i, n, kill){
   const logs = e.logs || [{date:e.date, hours:e.logged}];
   const res = RESULTS.length ? (RESULTS[e._i] || {}).row : null;
   const failed = res && !res.ok;
@@ -2358,12 +2371,16 @@ function subtaskRow(e, i, n){
       <span class="st-w">${what}</span>
       ${res ? `<span class="st-r">
             <span class="tag ${res.ok ? "ok" : "fail"}">${res.ok ? "done" : "failed"}</span>
-            ${res.key ? `<span class="key">${esc(res.key)}</span>` : ""}
+            ${res.key ? `<a class="key" href="${jiraLink(res.key)}" target="_blank"
+                 rel="noopener" title="Open ${esc(res.key)} in Jira">${esc(res.key)}</a>`
+               : ""}
             ${res.logged_dates && res.logged_dates.length && !res.ok
                ? `<span class="muted">${res.logged_dates.length}/${logs.length} logged</span>`
                : ""}</span>`
           : titleControl(e)}
       <span class="st-n" id="tn-${e._i}" title="${esc(planName(e))}">${esc(planName(e))}</span>
+      ${kill ? `<button class="st-kill" type="button" onclick="planDiscard(${e._i})"
+            title="Discard this one — nothing will be created for it">${KILL}</button>` : ""}
       <div class="st-d" id="sd-${e._i}">
         ${mixed ? `<div class="st-tt">These days were given ${e.titles.length}
             titles: ${e.titles.map(t => "<b>" + esc(t.label) + "</b> " + t.hours)
@@ -2372,6 +2389,31 @@ function subtaskRow(e, i, n){
         ${failed && res.error ? `<div class="st-e">${esc(res.error)}</div>` : ""}
       </div>
     </div>`;
+}
+
+// Drop one sub-task from the plan. Nothing is created for it: the day keeps
+// its hours on the attendance sheet, they simply do not go to Jira. Only
+// offered for leave, and only before the run — afterwards there is nothing
+// left to discard.
+function planDiscard(i){
+  const gone = PLAN[i];
+  if(!gone || RESULTS.length) return;
+  PLAN.splice(i, 1);
+  delete TITLES[titleKey(gone)];     // its title has nothing left to belong to
+  const name = planName(gone) || "that sub-task";
+  if(!PLAN.length){
+    $("planWrap").innerHTML = "";
+    $("planNotes").innerHTML = "";
+    $("c-run").classList.add("disabled");
+    $("c-items").classList.remove("done");
+    show("mItems", "info", "The whole plan was discarded. Change the days, or "
+         + "press Preview plan again.");
+    $("c-items").scrollIntoView({behavior:"smooth"});
+    return;
+  }
+  renderPlan();
+  show("mRun", "info", "Discarded <b>" + esc(name) + "</b> — it will not be "
+       + "created. Preview plan again to bring it back.");
 }
 
 function planToggle(i){
@@ -2526,6 +2568,7 @@ function showResults(){
   $("btnRetry").style.display = failed ? "inline-block" : "none";
   runBusy(false);
   $("btnRun").disabled = true;        // it has run; there is nothing to repeat
+  $("btnOver5").style.display = "none";   // step 6 has the only one now
   show("mRun", failed ? "info" : "ok",
        ok + " of " + rows.length + " sub-tasks created, " + logs +
        " work log" + (logs === 1 ? "" : "s") + " written.");
@@ -2740,6 +2783,10 @@ function syncPick(name){
   let label = empty ? placeholder : (chosen ? chosen.textContent : placeholder);
   if(!empty && sel.dataset.short === "key") label = label.split(" — ")[0];
   btn.querySelector(".picker-label").textContent = label;
+  // A column this narrow will ellipsise a long Task name, so the whole of it
+  // lives on the button itself: hover and you get the name, and for a ticket
+  // the summary that the key stands in for.
+  btn.title = empty ? "" : (chosen ? chosen.textContent : "");
 }
 
 // Logging another round keeps everything above: you stay signed in, on the
@@ -2757,6 +2804,7 @@ function logAnother(){
   $("c-result").style.display = "none";
   $("c-result").classList.remove("done");
   $("btnRetry").style.display = "none";
+  $("btnOver5").style.display = "";       // a fresh round can start over again
   runBusy(false);
   $("c-items").classList.remove("done");
   $("c-run").classList.add("disabled");
@@ -2808,9 +2856,9 @@ async function restoreSession(){
   // page that looks like nothing happened.
   if(/[?&]signedout=1/.test(location.search)){
     history.replaceState(null, "", location.pathname);
-    // Under the button, where the eye already is — not at the foot of the card
-    // below the folded-away password form.
-    show("mSso", "ok", "Signed out. Sign in again to start a new run.");
+    // Under the button, where the eye already is. Neutral, not green: signing
+    // out is something you did on purpose, not a result to celebrate.
+    show("mSso", "note", "Signed out. Sign in again to start a new run.");
   }
   try{
     const s = await (await fetch("/api/session")).json();

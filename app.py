@@ -44,6 +44,44 @@ RUN_WORKERS = 8            # sub-tasks on the go at once
 LOG_WORKERS = 4            # days of one sub-task logged at once
 
 
+# Only this page, on this machine. Listening on 127.0.0.1 keeps other
+# computers out; it does nothing about the browser already running here, which
+# will happily send a web page's request to a local port and does not need to
+# read the answer for the damage to be done.
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+
+@app.before_request
+def _same_origin_only():
+    """
+    Refuse anything that is not this page talking to its own backend.
+
+    Two cheap checks:
+
+      * **Host** must be a local name. This is what stops DNS rebinding — a
+        domain that resolves to 127.0.0.1 arrives with its own Host, and
+        without this the reply would be same-origin to that domain, so it could
+        read your sprint, your attendance and who you are.
+      * **Origin**, when there is one, must be us. Browsers always attach it to
+        a cross-origin fetch, and `Sec-Fetch-Site` catches what is left. The
+        CLI and curl send neither, and they are not the risk: a page cannot
+        make a browser omit them.
+
+    A refusal is a 403 with a plain reason, not a silent drop, so a genuine
+    caller can see what happened.
+    """
+    host = (request.host or "").rsplit(":", 1)[0].strip("[]").lower()
+    if host not in LOCAL_HOSTS:
+        return jsonify(ok=False, error="This app answers on localhost only."), 403
+    mine = ("http://" + request.host, "https://" + request.host)
+    origin = (request.headers.get("Origin") or "").rstrip("/")
+    if origin and origin not in mine:
+        return jsonify(ok=False, error="Cross-site request refused."), 403
+    if request.headers.get("Sec-Fetch-Site") in ("cross-site", "same-site"):
+        return jsonify(ok=False, error="Cross-site request refused."), 403
+    return None
+
+
 def _find_index() -> tuple:
     """Return (directory, filename) for index.html, checking ./ and ./static."""
     for folder in (HERE, os.path.join(HERE, "static")):

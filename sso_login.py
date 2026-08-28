@@ -7,22 +7,24 @@ portal does: if a live session can be found you are simply in, and if not, a
 sign-in window opens, you sign in there as you normally would, and the window
 closes by itself the moment Jira hands out a session.
 
-In order:
+The window comes first, because opening a browser is the slow part of any
+sign-in that needs one — everything else runs beside it:
 
-  1. A username + password (or PAT) saved from an earlier run — one REST call,
-     effectively instant, nothing on screen.
-  2. A browser on this machine that already holds a live Jira session; we
-     borrow those cookies.
-  3. Our own browser profile, headless. A sign-in window leaves its cookies
-     there, so every run after the first one is a single click and no window.
-  4. The sign-in window itself. Whatever the login page is — the stock
-     Atlassian form, Microsoft, Okta, a second factor — it is a real browser,
-     so a person can get through it. We only watch for the session that comes
-     out the other end.
+  * A saved username + password (or PAT) gets a short head start: one REST
+     call, and if it lands nothing opens at all.
+  * The window opens on Jira's login page, with the saved username and
+     password already in the boxes, so there is one button left to press.
+     Whatever that page is — the stock Atlassian form, Microsoft, Okta, a
+     second factor — it is a real browser, so a person can get through it.
+  * While it is open we keep looking for a session that would make it
+     unnecessary: the browsers on this machine, and the saved password if it
+     was still answering. The first one to work closes the window.
+  * A password typed into Jira's own form is saved when it works, so the next
+     run takes the first path and opens nothing.
 
-The browser we drive keeps its own profile folder next to this file, which is
-why step 3 works at all: the session established in the window last time is
-still there.
+The browser we drive keeps its own profile folder next to this file. A session
+established in the window is still there next time, so the window opens
+already signed in and closes itself in about a second.
 
 Optional dependencies (both degrade gracefully):
     pip install selenium        # drives the sign-in window  (the main path)
@@ -44,8 +46,10 @@ import jira_logging_utility as core
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROFILE_DIR = os.path.join(HERE, ".sso-browser-profile")
 
-WINDOW_POLL = 0.6              # how often the open window is checked, so it
+WINDOW_POLL = 0.35             # how often the open window is checked, so it
                                # closes promptly once the session appears
+QUICK_WAIT = 1.6               # head start for the saved password, before a
+                               # window opens that it may make unnecessary
 PROFILE_TIMEOUT = 14           # looking for a session we already have
 WINDOW_TIMEOUT = 300           # a human signing in, in the window
 PAGE_LOAD_TIMEOUT = 25         # never block forever inside driver.get()
@@ -85,23 +89,51 @@ return !!(document.getElementById('username-field') ||
           document.querySelector("a[href*='login.jsp']"));
 """
 
-# A small courtesy in the window: put the username we already know in the box
-# and leave the cursor in the password field. The password is never filled —
-# typing it is the whole reason the window is open.
-_JS_PREFILL_USERNAME = """
-var name = arguments[0];
+# The window opens with whatever we already know in it: the username, and the
+# password too when one is saved. That leaves one button to press — so the
+# cursor goes to it, or to the password box when there is nothing to put there.
+_JS_PREFILL_LOGIN = """
+var user = arguments[0], pass = arguments[1];
+var form = document.getElementById('login-form');
 var box = document.getElementById('username-field') ||
           document.getElementById('login-form-username') ||
-          document.querySelector("form#login-form input[name='username']") ||
-          document.querySelector("form#login-form input[name='os_username']");
-if (!box || box.value) return false;
-box.value = name;
-box.dispatchEvent(new Event('input', {bubbles: true}));
+          (form && form.querySelector("input[name='username'],input[name='os_username']"));
+if (!box) return false;
 var pw = document.getElementById('password-field') ||
          document.getElementById('login-form-password') ||
-         document.querySelector("form#login-form input[type=password]");
-if (pw) { pw.focus(); }
-return true;
+         (form && form.querySelector('input[type=password]'));
+var did = false;
+if (user && !box.value) {
+  box.value = user;
+  box.dispatchEvent(new Event('input', {bubbles: true}));
+  did = true;
+}
+if (pw && pass && !pw.value) {
+  pw.value = pass;
+  pw.dispatchEvent(new Event('input', {bubbles: true}));
+  did = true;
+}
+var go = form && form.querySelector("input[type=submit],button[type=submit],#login");
+if (pw && !pw.value) { pw.focus(); }
+else if (go && go.focus) { go.focus(); }
+return did;
+"""
+
+# What is in Jira's own login form right now. Read only while the window is on
+# the Jira host itself, and used for one thing: remembering a password that
+# worked, so the next run signs in without opening anything. This is the same
+# password the old sign-in form on the page used to collect and save.
+_JS_READ_LOGIN = """
+var form = document.getElementById('login-form');
+if (!form) return null;
+var box = document.getElementById('username-field') ||
+          document.getElementById('login-form-username') ||
+          form.querySelector("input[name='username'],input[name='os_username']");
+var pw = document.getElementById('password-field') ||
+         document.getElementById('login-form-password') ||
+         form.querySelector('input[type=password]');
+if (!box || !pw || !box.value || !pw.value) return null;
+return {u: box.value, p: pw.value};
 """
 
 # One profile means one browser at a time: the sign-in and the attendance fetch
@@ -172,6 +204,44 @@ def _client_from_cookies(base_url: str, cookie_header: str, verify_ssl: bool):
         return None, None
 
 
+class _SessionWatch:
+    """
+    Watch a driven browser for a Jira session without hammering Jira.
+
+    The obvious loop — "every tick, try the cookies" — costs a real request
+    every tick, because Jira hands out an anonymous JSESSIONID the moment its
+    login page loads. "Has a session cookie" is therefore true from the start
+    and cannot be the trigger. What actually changes when someone signs in is
+    the cookie itself (Jira rotates the session id) and the page they are on.
+
+    So: a request when either of those changes, and otherwise one every few
+    seconds in case some Jira signs you in without rotating anything. Typing a
+    password now costs nothing, and the sign-in is noticed sooner than before.
+    """
+
+    HEARTBEAT = 3.0
+
+    def __init__(self, base_url: str, host: str, verify_ssl: bool) -> None:
+        self.base_url = base_url
+        self.host = host
+        self.verify_ssl = verify_ssl
+        self._seen = None          # the cookie header we last asked about
+        self._url = None
+        self._asked = 0.0
+        self.requests = 0          # how many probes we actually spent
+
+    def look(self, cookies: list, url: str = "") -> tuple:
+        """(client, display_name), or (None, None) — including "not worth asking"."""
+        header = _cookie_header(cookies, self.host)
+        now = time.time()
+        if (header == self._seen and url == self._url
+                and now - self._asked < self.HEARTBEAT):
+            return None, None
+        self._seen, self._url, self._asked = header, url, now
+        self.requests += 1
+        return _client_from_cookies(self.base_url, header, self.verify_ssl)
+
+
 def _client_from_saved(base_url: str, verify_ssl: bool):
     """
     Sign in with the credentials we remembered, if there are any.
@@ -216,23 +286,91 @@ def _existing_browser_sessions(base_url: str):
             yield name, header
 
 
-def _profile_exists() -> bool:
-    """
-    Whether we have a browser profile worth searching.
-
-    On a first run there is nothing in it, and starting a browser to prove that
-    costs the eight seconds standing between the click and the sign-in window.
-    """
-    return any(os.path.isdir(os.path.join(PROFILE_DIR, name))
-               for name in ("edge", "chrome"))
-
-
-def _saved_username(base_url: str) -> str:
-    """The username we already know, for the window to start filled in."""
+def _saved_login(base_url: str) -> tuple:
+    """(username, password) we already know, for the window to start filled in."""
     try:
-        return (jira_credentials.load(base_url) or {}).get("username") or ""
+        saved = jira_credentials.load(base_url) or {}
+        return saved.get("username") or "", saved.get("password") or ""
     except Exception:  # noqa: BLE001 — a courtesy, never a reason to stop
+        return "", ""
+
+
+def _remember_login(base_url: str, username: str, password: str) -> str:
+    """Save a sign-in that worked. Returns where it went, or ''."""
+    try:
+        return jira_credentials.save(base_url, username, password) or ""
+    except Exception:  # noqa: BLE001 — signed in is signed in; saving is extra
         return ""
+
+
+def _remember_verified_login(base_url: str, verify_ssl: bool,
+                             username: str, password: str) -> str:
+    """
+    Save a sign-in typed into Jira's form — but only once it is proved.
+
+    That form is read by polling, so what we are holding may be a password
+    caught between keystrokes. Saving a truncated one would make the next run
+    sign in with a wrong password, and a few of those is how Jira starts asking
+    for a CAPTCHA. One request settles it, and it is the same request the next
+    run will make anyway.
+    """
+    if not (username and password):
+        return ""
+    try:
+        client = core.JiraClient(base_url, username, password,
+                                 verify_ssl=verify_ssl, timeout=PROBE_TIMEOUT)
+        client.verify_login()
+    except Exception:  # noqa: BLE001 — half a password is not worth keeping
+        return ""
+    return _remember_login(base_url, username, password)
+
+
+class _Probe:
+    """
+    The sign-ins that need no window, running while one opens.
+
+    Two of them, in the order they answer: the password we saved (one request)
+    and then the browsers on this machine (several cookie stores, and a locked
+    one can take seconds — which is exactly why it does not hold the window up
+    any more). `saved_done` is what the caller waits on for its head start;
+    `result` is filled the moment anything works, and the window loop watches
+    for it.
+    """
+
+    def __init__(self, base_url: str, verify_ssl: bool) -> None:
+        self.base_url = base_url
+        self.verify_ssl = verify_ssl
+        self.result = None                  # (client, display_name)
+        self.saved_done = threading.Event()
+        self.stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self):
+        self._thread.start()
+        return self
+
+    def _run(self) -> None:
+        try:
+            client, who, _had = _client_from_saved(self.base_url, self.verify_ssl)
+            if client:
+                self.result = (client, who)
+        except Exception:  # noqa: BLE001
+            pass
+        finally:
+            self.saved_done.set()
+        if self.result or self.stop.is_set():
+            return
+        try:
+            for _name, header in _existing_browser_sessions(self.base_url):
+                if self.stop.is_set():
+                    return
+                client, who = _client_from_cookies(self.base_url, header,
+                                                   self.verify_ssl)
+                if client:
+                    self.result = (client, who)
+                    return
+        except Exception:  # noqa: BLE001
+            pass
 
 
 # --------------------------------------------------------------------------- #
@@ -332,14 +470,16 @@ class SsoLogin:
         self._cancel = threading.Event()
         self._launched = False
         self._state = {"state": "idle", "message": "", "user": None,
-                       "stage": "", "can_open_window": False}
+                       "stage": "", "saved": "", "can_open_window": False}
 
     # ---- state ---------------------------------------------------------- #
     def _set(self, state: str, message: str, user: Optional[str] = None,
-             can_open_window: bool = False, stage: str = "") -> None:
+             can_open_window: bool = False, stage: str = "",
+             saved: str = "") -> None:
         with self._lock:
             self._state = {"state": state, "message": message, "user": user,
-                           "stage": stage, "can_open_window": can_open_window}
+                           "stage": stage, "saved": saved,
+                           "can_open_window": can_open_window}
 
     def status(self) -> dict:
         with self._lock:
@@ -386,10 +526,11 @@ class SsoLogin:
         return True, ""
 
     # ---- the pieces of a sign-in ----------------------------------------- #
-    def _adopt(self, client, who: str, on_success) -> None:
+    def _adopt(self, client, who: str, on_success, saved: str = "") -> None:
         """Take a working session as ours and report the sign-in done."""
         on_success(client, who)
-        self._set("done", "Signed in as {}".format(who), who, stage="done")
+        self._set("done", "Signed in as {}".format(who), who, stage="done",
+                  saved=saved)
 
     def _cancelled(self) -> bool:
         if self._cancel.is_set():
@@ -406,6 +547,7 @@ class SsoLogin:
         cookies in this profile, so the next run is one click and silence.
         """
         host = _host(base_url)
+        watch = _SessionWatch(base_url, host, verify_ssl)
         with browser_lock():
             driver = None
             try:
@@ -423,8 +565,7 @@ class SsoLogin:
                         cookies = driver.get_cookies()
                     except Exception:  # noqa: BLE001 — the browser went away
                         return None, None
-                    client, who = _client_from_cookies(
-                        base_url, _cookie_header(cookies, host), verify_ssl)
+                    client, who = watch.look(cookies)
                     if client:
                         return client, who
                     try:
@@ -441,18 +582,25 @@ class SsoLogin:
                     except Exception:  # noqa: BLE001
                         pass
 
-    def _window_session(self, base_url: str, verify_ssl: bool, on_success) -> None:
+    def _window_session(self, base_url: str, verify_ssl: bool, on_success,
+                        probe=None) -> None:
         """
         Open the sign-in window and wait for a session to come out of it.
 
         We do not drive that page: it may be Jira's own form, Microsoft, or a
-        second factor, and all of those are a person's job. All we do is watch
-        the cookies — and the moment they work, the window closes and the app
-        is signed in.
+        second factor, and all of those are a person's job. What we do is fill
+        in what we already know, watch the cookies, and keep an eye on the
+        `probe` running beside us — whichever produces a session first closes
+        the window.
+
+        A password typed into Jira's own form is remembered when it works, so
+        the next run is a single request and nothing opens.
         """
         host = _host(base_url)
-        username = _saved_username(base_url)
+        username, password = _saved_login(base_url)
         url = base_url + LOGIN_PATH
+        typed = None            # the last complete sign-in seen in the form
+        watch = _SessionWatch(base_url, host, verify_ssl)
         with browser_lock():
             driver = None
             try:
@@ -476,20 +624,46 @@ class SsoLogin:
                 while time.time() < deadline:
                     if self._cancel.is_set():
                         return self._set("idle", "")
+                    # A session found without the window ends it too: the
+                    # saved password may simply have been slower than the
+                    # browser was to open.
+                    if probe is not None and probe.result:
+                        client, who = probe.result
+                        return self._adopt(client, who, on_success)
+                    # Only the cookies say whether the window is still there.
+                    # current_url throws while a page is navigating, and
+                    # treating that as "gone" used to close the window in the
+                    # middle of a sign-in and blame the user for it.
                     try:
                         cookies = driver.get_cookies()
                     except Exception:  # noqa: BLE001
                         break            # the window is gone — see why below
-                    client, who = _client_from_cookies(
-                        base_url, _cookie_header(cookies, host), verify_ssl)
+                    try:
+                        here = _host(driver.current_url or "")
+                    except Exception:  # noqa: BLE001 — mid-navigation
+                        here = ""
+                    client, who = watch.look(cookies, here)
                     if client:
-                        return self._adopt(client, who, on_success)
-                    if username and not prefilled:
+                        saved_to = ""
+                        if typed:
+                            saved_to = _remember_verified_login(
+                                base_url, verify_ssl, *typed)
+                        return self._adopt(client, who, on_success, saved_to)
+                    # Only on Jira's own host, and only its own login form: an
+                    # identity provider's password is not ours to keep.
+                    if here == host:
+                        if not prefilled and (username or password):
+                            try:
+                                prefilled = bool(driver.execute_script(
+                                    _JS_PREFILL_LOGIN, username, password))
+                            except Exception:  # noqa: BLE001
+                                pass
                         try:
-                            prefilled = bool(driver.execute_script(
-                                _JS_PREFILL_USERNAME, username))
+                            seen = driver.execute_script(_JS_READ_LOGIN)
                         except Exception:  # noqa: BLE001
-                            pass
+                            seen = None
+                        if seen and seen.get("u") and seen.get("p"):
+                            typed = (seen["u"], seen["p"])
                     time.sleep(WINDOW_POLL)
                 else:
                     return self._set("error", _WINDOW_TIMED_OUT.format(
@@ -506,54 +680,47 @@ class SsoLogin:
         # yourself works just as well as letting it close itself.
         if self._cancelled():
             return None
+        if probe is not None and probe.result:
+            client, who = probe.result
+            return self._adopt(client, who, on_success)
         self._set("working", "Checking whether that signed you in…",
                   stage="checking")
         client, who = self._profile_session(base_url, verify_ssl)
         if client:
-            return self._adopt(client, who, on_success)
+            return self._adopt(client, who, on_success,
+                               _remember_verified_login(base_url, verify_ssl, *typed)
+                               if typed else "")
         return self._set("error", _WINDOW_CLOSED, None, True)
 
     def _run(self, base_url: str, verify_ssl: bool, on_success,
              interactive: bool = False) -> None:
         base_url = base_url.rstrip("/")
+        probe = None
         try:
             if not interactive:
-                # --- 1. the sign-in we already remember (one request) ------ #
+                # The saved password gets a head start measured in one request:
+                # if it answers, nothing opens. If it is slow, it keeps going
+                # in the background and the window closes when it lands.
                 self._set("working", "Signing you in…", stage="checking")
-                client, who, _had_saved = _client_from_saved(base_url, verify_ssl)
-                if client:
+                probe = _Probe(base_url, verify_ssl).start()
+                probe.saved_done.wait(QUICK_WAIT)
+                if probe.result:
+                    client, who = probe.result
                     return self._adopt(client, who, on_success)
                 if self._cancelled():
                     return None
 
-                # --- 2. a session from a browser already signed in --------- #
-                for name, header in _existing_browser_sessions(base_url):
-                    if self._cancelled():
-                        return None
-                    self._set("working",
-                              "Trying the session in {}…".format(name.title()),
-                              stage="checking")
-                    client, who = _client_from_cookies(base_url, header, verify_ssl)
-                    if client:
-                        return self._adopt(client, who, on_success)
-
-                # --- 3. the session the window left here last time --------- #
-                if _profile_exists():
-                    self._set("working", "Looking for a session you already have…",
-                              stage="checking")
-                    client, who = self._profile_session(base_url, verify_ssl)
-                    if client:
-                        return self._adopt(client, who, on_success)
-                    if self._cancelled():
-                        return None
-
-            # --- 4. ask the person: open the sign-in window ---------------- #
-            return self._window_session(base_url, verify_ssl, on_success)
+            # Straight to the window. It is the slow part, so it is not queued
+            # behind anything, and the probe keeps looking while it is open.
+            return self._window_session(base_url, verify_ssl, on_success, probe)
         except BrowserUnavailable as exc:
             # Nothing to reopen: the window itself is what is missing.
             self._set("error", str(exc), None, False)
         except Exception as exc:  # noqa: BLE001
             self._set("error", str(exc), None, True)
+        finally:
+            if probe is not None:
+                probe.stop.set()
         return None
 
 

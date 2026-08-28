@@ -128,7 +128,7 @@ Defaults live at the top of each module — change them there, or pass a flag.
 
 | Setting | Where | Default |
 | --- | --- | --- |
-| Jira base URL | the **Jira URL** box on the page, or `--base-url` | `https://tracking.i2cinc.com/` |
+| Jira base URL | `static/index.html` › the hidden `baseUrl` field, or `--base-url` | `https://tracking.i2cinc.com/` |
 | Attendance portal | `attendance_portal.py` › `PORTAL_URL` | `https://attendance.i2cinc.com/employee/attendance` |
 | Attendance API | `attendance_portal.py` › `API_BASE` | `https://attendance-server-pilot.i2cinc.com/api/v1` |
 | Where the sign-in window opens | `sso_login.py` › `LOGIN_PATH` | `/login.jsp?os_destination=…` |
@@ -194,38 +194,41 @@ python jira_logging_utility.py --dry-run
 
 ### Step 1 — Sign in
 
-One button: **Sign in with Jira** — the same shape as the attendance
-portal's. Behind it the backend tries, in order:
+One button: **Sign in with Jira**. Signed out, it has the window to itself —
+a centred card and nothing else, because none of the steps below can do
+anything until it succeeds. Signing in swaps them in and collapses step 1 to
+your name and **Sign out**.
 
-1. **A password or PAT you saved earlier** — one REST call, effectively
-   instant, nothing on screen.
-2. **A browser on this machine** that already holds a live Jira session; its
-   cookies are borrowed (`browser_cookie3`).
-3. **This app's own browser profile**, headless. A sign-in window leaves its
-   cookies there, so this is the step that makes every run after the first one
-   a single click and no window. Skipped on a first run, when there is no
-   profile to search.
-4. **The sign-in window.** A real browser window, shaped like a sign-in popup,
-   opens on Jira's login page with your username already filled in. Sign in
-   however that page asks — the stock Atlassian form, an identity provider, a
-   second factor — and the window closes by itself the moment Jira hands out a
-   session. Closing it yourself works too: the session it established is in the
-   profile either way, and the app looks there before giving up.
+Opening a browser is the slow part of any sign-in that needs one, so it is not
+queued behind anything:
 
-Nothing on that page is automated: the app watches for the session that comes
-out of it, and that is all. Which is why it does not matter what your Jira's
-login page happens to be.
+- **A saved password or PAT gets a head start** of about a second and a half —
+  one REST call. If it answers, nothing opens at all. This is the usual case,
+  and it takes ~1.2s.
+- **Otherwise the window opens**, on Jira's login page, with the saved username
+  *and* password already in the boxes and the cursor on **Log in**. Sign in
+  however that page asks — the stock Atlassian form, an identity provider, a
+  second factor — and it closes by itself the moment Jira hands out a session.
+  Closing it yourself works just as well: the session is in the app's browser
+  profile either way, and the app looks there before giving up.
+- **While it is open**, the checks that need no window keep running: the saved
+  password if it was merely slow, and the browsers on this machine
+  (`browser_cookie3`, which can take several seconds on a locked cookie store —
+  which is why it no longer holds the window up). The first to produce a session
+  closes the window.
+- **A password typed into Jira's own login form is remembered** when it works,
+  so the next run takes the first path and opens nothing. It goes to Windows
+  Credential Manager, the same place the old sign-in form used to put it, and
+  the page says so. Only Jira's own form on your Jira's own host is read this
+  way — an identity provider's password is never touched.
 
-Signed out, the sign-in has the window to itself — one centred card, the
-button, and nothing else: the steps below it cannot do anything until it
-succeeds, so they are not drawn at all. Signing in swaps them in and collapses
-step 1 to your name and **Sign out**.
+Nothing on that page is automated beyond filling in what you already saved: the
+app watches for the session that comes out of it. Which is why it does not
+matter what your Jira's login page happens to be.
 
-**If it can't sign you in**, the message says so and offers the window again.
-Under the button, *Use a password or token instead* unfolds a form — username +
-password, or a Personal Access Token with the username left blank, which is
-what Jira Server wants when password login is disabled. A password entered
-there is saved, and turns every later sign-in into step 1 above.
+Because the window can get through anything a browser can, there is no
+username/password form on the page any more. The Jira URL is a hidden field in
+`static/index.html` (or `--base-url` on the CLI).
 
 A page reload keeps you signed in; **Start over** clears the session.
 
@@ -350,6 +353,13 @@ once — to show its day chips (`Mon 27 Jul 8h`) and, where the days were titled
 differently, which titles it could go by. A row opens by itself when there is
 something to see: mixed titles, or a failure.
 
+**Discarding a leave.** Leave and holidays are routed into Planned Leaves by
+the sheet, not chosen by you, so each of those rows carries a `×` at its end:
+press it and that sub-task leaves the plan — nothing is created for it and the
+day is simply not logged. The day keeps its hours on the attendance sheet, so
+**Preview plan** brings it back if you change your mind. Only leave rows offer
+it, and only before the run.
+
 Under **Preview plan** in step 4, whatever the plan left out is a count you can
 read at a glance, with the days as chips — and a long list folds away:
 
@@ -364,10 +374,15 @@ The same cards, now carrying `done` or `failed`, the new Jira key, and how far
 each got — a half-written one says so (*"failed · ST12-7003 · 1 of 3 logged"*)
 with the reason underneath.
 
+Every Jira key on the page — the parent tickets and each new sub-task — is a
+link to the issue, opening in a new tab. So a finished run reads as a list of
+things you can click straight into.
+
 **Retry failed** re-runs only the failures and each resumes exactly where it
 stopped: the sub-task is not created twice, and only the days still missing are
 logged. **Log another task** keeps the sign-in, sprint, dates and attendance,
-and clears just the work items.
+and clears just the work items. **Start over** lives beside it, and only there
+once a run has finished — until then it sits next to **Create & log all**.
 
 ---
 
@@ -616,11 +631,13 @@ The backend endpoints, if you want to script against it: `/api/login`,
 - **"Jira is asking for a CAPTCHA"** — too many failed logins locked the form.
   Sign in once in a browser to clear it, or use a PAT.
 - **"That window closed before Jira signed you in"** — the window was shut
-  before Jira handed out a session. Press the button again, or use *Use a
-  password or token instead* below it.
+  before Jira handed out a session. Press the button again.
 - **The sign-in window never opens** — that window is Selenium's job:
-  `pip install selenium`, and have Edge or Chrome installed. The password form
-  under the button needs neither.
+  `pip install selenium`, and have Edge or Chrome installed. There is no
+  password form to fall back on any more, so this one is not optional.
+- **The window opens with the wrong password in it** — that is the saved one,
+  and it is stale. Type the right one over it: what works is saved over the
+  old entry.
 - **"Sprint not found"** — usually a misspelt name. If your Jira has the sprint
   picker disabled, pass the board id (`--board <id>`, from the board URL
   `…RapidBoard.jspa?rapidView=<id>`).
