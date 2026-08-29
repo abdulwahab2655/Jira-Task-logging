@@ -463,8 +463,17 @@
      92px floor is what its key needs — below that the fraction stops shrinking
      it. Row-gap is larger than column-gap: the lines want air, the columns
      want the pixels. */
+  /* Two shapes, because the first column's job changes. Before you pick, it
+     has to hold "Select a ticket", and the Task beside it only says "Ticket
+     first" — so the room starts on the left. Once a ticket is chosen that
+     column shows nothing but a key, and what it no longer needs goes to the
+     Task, which is the one holding a real phrase. The `picked` class is put
+     there by syncPick, so the shape follows the state of the row. */
   .wi-cells{display:grid;gap:10px 5px;align-items:end;
-    grid-template-columns:minmax(106px,0.7fr) minmax(0,1.3fr) 54px 26px}
+    grid-template-columns:minmax(0,1.05fr) minmax(0,0.95fr) 54px 26px;
+    transition:grid-template-columns .18s ease}
+  .wi-cells.picked{grid-template-columns:minmax(106px,0.7fr) minmax(0,1.3fr)
+    54px 26px}
   /* Tighter than the pickers elsewhere on the page: every pixel of padding
      here is a pixel off the end of a Task name. */
   .wi-cells .picker-btn{padding:8px;font-size:13px;gap:3px}
@@ -1790,7 +1799,7 @@ function fillIssueSelect(r){
   const sel = $("ri-" + r.id);
   if(!sel) return;
   sel.innerHTML = "";
-  const ph = new Option("Select\u2026", "");
+  const ph = new Option("Select a ticket", "");
   ph.disabled = true; ph.selected = true;
   sel.appendChild(ph);
   ISSUES.forEach(i => sel.appendChild(new Option(i.key + " — " + i.summary, i.key)));
@@ -2787,6 +2796,12 @@ function syncPick(name){
   // lives on the button itself: hover and you get the name, and for a ticket
   // the summary that the key stands in for.
   btn.title = empty ? "" : (chosen ? chosen.textContent : "");
+  // The picker that shows a key is also the one whose column can shrink once
+  // something is in it — so it tells its row, and the row re-balances.
+  if(sel.dataset.short === "key"){
+    const row = btn.closest(".wi-cells");
+    if(row) row.classList.toggle("picked", !empty);
+  }
 }
 
 // Logging another round keeps everything above: you stay signed in, on the
