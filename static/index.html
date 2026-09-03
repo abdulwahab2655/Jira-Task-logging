@@ -561,7 +561,7 @@
 <body class="signed-out">
 <div class="wrap">
   <h1><span class="dot"></span> Jira Task Logging</h1>
-  <p class="sub">Create daily sub-tasks, log the hours, and mark them Done — from your attendance sheet.</p>
+  <p class="sub">Create automatically sub-tasks, log the hours, and mark them Done — from your attendance sheet.</p>
 
   <!-- THE SIGN-IN SCREEN — shown while `signed-out` is on <body>, which is
        every moment before step 1 has someone to name. The controls live here
@@ -577,7 +577,7 @@
         </svg>
       </div>
       <h2 class="gate-title">Jira Task Logging</h2>
-      <p class="gate-sub">Create daily sub-tasks, log the hours, and mark them
+      <p class="gate-sub">Create automatically sub-tasks, log the hours, and mark them
         Done — from your attendance sheet. Sign in to your Jira to start.</p>
 
       <button class="sso-btn" id="btnSso" onclick="startSignIn()" autofocus>
@@ -722,8 +722,8 @@
     <div class="tips">
       <div><b>Pick the days</b> shift-click a run, ctrl-click to add one</div>
       <div><b>Give them a ticket</b> and a Task — the title is optional</div>
-      <div><b>Two tickets on a day</b> split its hours between them</div>
-      <div><b>Leave and holidays</b> go to Planned Leaves on their own</div>
+      <div><b>More tickets on a day</b> split its hours between them</div>
+      <div><b>Leaves and holidays</b> go to Planned Leaves on their own</div>
     </div>
 
     <div class="wi">
@@ -821,7 +821,11 @@ let LOGGED_IN = false;
 const $ = id => document.getElementById(id);
 function show(el, type, text){ const m=$(el); m.className="msg show "+type; m.innerHTML=text; }
 function hide(el){ $(el).className="msg"; }
-function enable(card){ $(card).classList.remove("disabled"); syncCardLocks(); }
+function enable(card){ lockCard(card, false); }
+// Locking a card is two things at once: the class that greys it out and the
+// controls inside it. Anything that only flips the class leaves live buttons
+// behind a dead panel - or, worse, a dead button on a card that has opened.
+function lockCard(card, off){ $(card).classList.toggle("disabled", !!off); syncCardLocks(); }
 function markDone(card){ $(card).classList.add("done"); }
 
 // `pointer-events:none` only stops the mouse: a disabled card could still be
@@ -987,7 +991,7 @@ async function loadSprint(){
       : "No 'Planned Leaves' issue detected in this sprint — leave days can't be routed.");
   markDone("c-sprint");
   enable("c-dates");
-  $("c-items").classList.add("disabled");
+  lockCard("c-items", true);
   // A different sprint means different tickets: whatever was assigned against
   // the old ones goes.
   resetBelow(2);
@@ -1207,11 +1211,11 @@ function refreshDates(){
   $("c-dates").classList.toggle("done", datesReady());
   // Step 4 opens only once step 3 is genuinely complete — dates in and the
   // attendance read — since the calendar it draws is made from both.
-  $("c-items").classList.toggle("disabled", !ready);
+  lockCard("c-items", !ready);
   if(!ready){
     // Changing step 3 invalidates anything built from it.
     $("c-items").classList.remove("done");
-    $("c-run").classList.add("disabled");
+    lockCard("c-run", true);
   } else loadDays();
 }
 // A real edit marks the dates as yours; a programmatic .value assignment does
@@ -1582,9 +1586,9 @@ function newRow(){
 // What a row would log if its Hours box is left blank: its share of whichever
 // day is selected. Shown as the placeholder so "optional" is not a mystery.
 function rowHint(r, dayMins){
-  if(absentSel()) return "e.g. 5h";
+  if(absentSel()) return "5h";
   const left = SEL.length === 1 ? remainingMins(SEL[0]) : dayMins;
-  if(!left) return "e.g. 5h";
+  if(!left) return "5h";
   const pct = ROWS.length > 1 ? (r.share || 0) / 100 : 1;
   return fmtMinutes(Math.round(left * pct));
 }
@@ -1764,10 +1768,9 @@ function wiRenderRows(){
                  oninput="wiRowHours(${r.id}, this.value)"></div>
         <button class="wi-x" type="button" onclick="wiRemoveRow(${r.id})"
                 title="Remove this ticket"${multi ? "" : ' style="visibility:hidden"'}>&#10005;</button>
-        <div class="wi-title"><label>Title <span class="muted">(optional — what
-          you were doing)</span></label>
+        <div class="wi-title"><label>Title <span class="muted"></span></label>
           <input id="rn-${r.id}" value="${esc(r.title || "")}"
-                 placeholder="Edit Invoice Screen"
+                 placeholder="Enter title for task (optional)"
                  oninput="wiRowChanged(${r.id},'title')"></div>
       </div>
       <div class="wi-sum" id="rm-${r.id}"></div>
@@ -2162,7 +2165,7 @@ function resetBelow(step){
   PLAN = []; PLAN_CAP = "24h"; RESULTS = []; TITLES = {};
   $("planWrap").innerHTML = "";
   $("planNotes").innerHTML = "";
-  $("c-run").classList.add("disabled");
+  lockCard("c-run", true);
   $("c-run").classList.remove("done");
   $("c-items").classList.remove("done");
   $("c-result").style.display = "none";
@@ -2181,7 +2184,7 @@ function itemsChanged(){
   PLAN = [];
   $("planWrap").innerHTML = "";
   $("planNotes").innerHTML = "";
-  $("c-run").classList.add("disabled");
+  lockCard("c-run", true);
 }
 
 // ---- step 5: preview ------------------------------------------------------
@@ -2413,7 +2416,7 @@ function planDiscard(i){
   if(!PLAN.length){
     $("planWrap").innerHTML = "";
     $("planNotes").innerHTML = "";
-    $("c-run").classList.add("disabled");
+    lockCard("c-run", true);
     $("c-items").classList.remove("done");
     show("mItems", "info", "The whole plan was discarded. Change the days, or "
          + "press Preview plan again.");
@@ -2822,7 +2825,7 @@ function logAnother(){
   $("btnOver5").style.display = "";       // a fresh round can start over again
   runBusy(false);
   $("c-items").classList.remove("done");
-  $("c-run").classList.add("disabled");
+  lockCard("c-run", true);
   wiDraw(); wiRenderList(); wiSelectionChanged(); itemsChanged();
   loadDays();
   $("c-items").scrollIntoView({behavior:"smooth"});
