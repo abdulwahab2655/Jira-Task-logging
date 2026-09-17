@@ -29,6 +29,7 @@ from flask import Flask, jsonify, request, send_from_directory
 import attendance_portal
 import jira_credentials
 import jira_logging_utility as core
+import self_update
 import sso_login
 
 # Serve files from the folder this script lives in (works whether index.html
@@ -682,6 +683,12 @@ def _open_browser():
 
 
 if __name__ == "__main__":
+    # Latest code first, server second. If a pull lands, this does not return:
+    # it re-execs so the run uses what was just fetched, not what Python read
+    # a moment ago. Anything in the way - offline, no git, local edits - is a
+    # printed line and nothing more. Pass --no-update to start straight away.
+    self_update.update_and_restart()
+
     print("Jira Timesheet UI running at  http://127.0.0.1:5000")
     threading.Timer(1.0, _open_browser).start()
     app.run(host="127.0.0.1", port=5000, debug=False)

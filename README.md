@@ -55,7 +55,10 @@ python app.py
 
 Then open **<http://127.0.0.1:5000>**, and do the first run small — narrow the
 dates to two or three days and press **Preview plan** before anything is
-written. Full walk-through in [§1.6 First run](#16-first-run).
+written. Full walk-through in [§1.7 First run](#17-first-run).
+
+Every launch fetches the latest code first, so `python app.py` is always the
+current version — see [§1.6 It updates itself](#16-it-updates-itself).
 
 Prefer a terminal? `python jira_logging_utility.py --dry-run` previews the same
 plan and creates nothing.
@@ -66,7 +69,7 @@ plan and creates nothing.
 
 | | Section | What's in it |
 | --- | --- | --- |
-| **1** | [Configure it](#1-configure-it) | requirements, install, servers, where your sign-in is kept, tunables, first run |
+| **1** | [Configure it](#1-configure-it) | requirements, install, servers, where your sign-in is kept, tunables, self-update, first run |
 | **2** | [The web UI, step by step](#2-the-web-ui-step-by-step) | sign in → sprint → dates → work items → review → results |
 | **3** | [What a day is worth](#3-what-a-day-is-worth) | the hour rules, both modes, worked examples |
 | **4** | [What Jira already has](#4-what-jira-already-has) | the timesheet read-back, and why hours can't go in twice |
@@ -76,7 +79,7 @@ plan and creates nothing.
 | **8** | [When something goes wrong](#8-when-something-goes-wrong) | every error message, and what to do about it |
 
 > [!TIP]
-> New here? Read [§1.6 First run](#16-first-run), then
+> New here? Read [§1.7 First run](#17-first-run), then
 > [§3 What a day is worth](#3-what-a-day-is-worth) — between them they cover
 > everything the tool will actually do to your Jira.
 
@@ -164,7 +167,42 @@ Defaults live at the top of each module — change them there, or pass a flag.
 `POOL_SIZE` at least that big. Turn them down if your Jira starts answering
 with 429s.
 
-### 1.6 First run
+### 1.6 It updates itself
+
+`python app.py` starts by fetching this repository and fast-forwarding your
+checkout. If anything came down it restarts itself once, so the run you get is
+the code that was just pulled and not the copy Python read a moment earlier.
+
+```
+Update:  checking origin/main for new code ...
+Update:  pulled the latest changes -> 73532d2 calender issue fix
+Update:  restarting with the new code ...
+
+Jira Timesheet UI running at  http://127.0.0.1:5000
+```
+
+The update is never allowed to stop the app. Each of these prints one line and
+carries straight on with the code you already have:
+
+| | |
+| --- | --- |
+| **No git, or not a checkout** | you downloaded a zip rather than cloning |
+| **No network / no VPN** | the fetch times out after 20s |
+| **Branch tracks nothing** | `git branch --set-upstream-to=origin/main` fixes it |
+| **You have edits** | uncommitted changes to tracked files are never touched — commit or stash them and the next launch updates |
+| **The branch has diverged** | it refuses to merge; run `git pull` yourself to see what is in the way |
+
+Untracked files are ignored, so a stray `__pycache__` or an export sitting in
+the folder will not switch updating off.
+
+To skip it — offline, or while you are editing the code:
+
+```powershell
+python app.py --no-update
+$env:JIRA_LOGGER_NO_UPDATE = "1"   # same thing, for every run in this shell
+```
+
+### 1.7 First run
 
 ```powershell
 python app.py          # then open http://127.0.0.1:5000
@@ -610,6 +648,7 @@ python jira_logging_utility.py --attendance-file attendance.xlsx `
 | `attendance_portal.py` | Fetches attendance from the portal's API |
 | `sso_login.py` | Signing in: saved password → browser cookies → our own profile → the sign-in window |
 | `jira_credentials.py` | Keeps your sign-in in Windows Credential Manager |
+| `self_update.py` | Fast-forwards the checkout at startup and restarts once if anything came down |
 
 The rules live in exactly one place. `classify_day()` decides what a day is
 worth, `remaining_day()` subtracts what Jira already has, and `pack_plan()`
