@@ -689,6 +689,6 @@ if __name__ == "__main__":
     # printed line and nothing more. Pass --no-update to start straight away.
     self_update.update_and_restart()
 
-    print("Jira Timesheet UI running at  http://127.0.0.1:5000")
+    print("Jira Task Logging UI running at  http://127.0.0.1:5000")
     threading.Timer(1.0, _open_browser).start()
     app.run(host="127.0.0.1", port=5000, debug=False)
